@@ -12,7 +12,7 @@
 - ✅ Fundação de governança criada (CLAUDE.md, docs, sessões).
 - ✅ Restrições registradas (`docs/RESTRICOES.md` — Vercel Hobby).
 - ✅ Playbook de venda/configuração de cliente (`docs/PLAYBOOK-CLIENTE.md`).
-- ⏳ Git + GitHub (`octaviosilva2/carrossel-studio`) — em conexão.
+- ✅ Git + GitHub publicado em `octaviosilva2/carrossel-studio` (branch `main`).
 
 ## Próximo passo (nova sessão, working dir = carrossel-studio)
 1. **Rodar a esteira `dev-agents`** a partir do planejamento:
