@@ -1,0 +1,21 @@
+# Dependências
+node_modules/
+
+# Build / Next.js
+.next/
+out/
+dist/
+build/
+
+# Ambiente / segredos (NUNCA commitar)
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Logs / sistema
+*.log
+.DS_Store
+Thumbs.db
