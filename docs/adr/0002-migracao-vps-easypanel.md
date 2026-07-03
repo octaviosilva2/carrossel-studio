@@ -1,8 +1,8 @@
 # ADR 0002 — Migração de infra: Neon + Vercel Blob → VPS Hostinger (EasyPanel)
 
 - **Data:** 2026-07-02
-- **Status:** Proposta — **aguardando pré-requisitos** (confirmar o que já está provisionado no
-  EasyPanel). Não executar código antes de destravar a Fase 0.
+- **Status:** **Implementada** (2026-07-03) — Blocos 1, 2 e 3 concluídos. Banco e storage
+  self-hosted na VPS em produção, app na Vercel apontando pra eles, smoke test completo PASS.
 - **Decisor:** CTO (Claude), delegado pelo CEO (Octavio)
 - **Substitui parcialmente:** ADR 0001 (camadas Banco e Storage)
 

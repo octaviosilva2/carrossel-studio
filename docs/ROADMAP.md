@@ -87,4 +87,12 @@ gerenciados. Ver `docs/adr/0002-migracao-vps-easypanel.md` e `docs/STATUS.md`.
   no EasyPanel, TLS, backup, firewall.
 - ✅ **Bloco 2 — Código** (2026-07-02): driver de banco (`pg`) e storage (MinIO via
   presigned PUT) trocados pela esteira `dev-agents`. 269 testes verdes, validado.
-- ⏳ **Bloco 3 — Cutover** (pendente): env vars na Vercel, deploy, smoke test.
+- ✅ **Bloco 3 — Cutover** (2026-07-03): env vars na Vercel, deploy de produção, domínio
+  `carrosselstudio.evoiatecnologia.com` no ar, smoke test completo (login, salvar carrossel,
+  upload MinIO, export PNG com allowlist nova) PASS. Detalhe:
+  `docs/sessoes/2026-07-03-adr0002-bloco3-cutover.md`.
+
+## Produto em produção
+O Carrossel Studio está no ar em `carrosselstudio.evoiatecnologia.com`, banco e storage
+self-hosted na VPS. Pronto para configurar o 1º cliente pagante (decisão Hobby→Pro da
+Vercel ainda pendente do CEO — ver `docs/RESTRICOES.md`).

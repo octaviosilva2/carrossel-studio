@@ -22,3 +22,6 @@ certs/
 *.log
 .DS_Store
 Thumbs.db
+
+# Artefato de build do TypeScript (incremental cache local)
+tsconfig.tsbuildinfo

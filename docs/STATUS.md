@@ -4,9 +4,10 @@
 > `CLAUDE.md` e `docs/VISAO.md`.
 
 ## Última atualização
-2026-07-02 — **ADR 0002 Bloco 2 (código) CONCLUÍDA** — banco Neon→`pg` self-hosted (VPS)
-e storage Vercel Blob→MinIO/S3 (presigned PUT). 269 testes verdes, build limpo, migrations
-e seed rodados de verdade contra a VPS. Detalhe abaixo (após o histórico de sessões S1–S6).
+2026-07-03 — **ADR 0002 Bloco 3 (cutover) CONCLUÍDA — produto em produção.** App na Vercel
+(`carrosselstudio.evoiatecnologia.com`) apontando pro banco e storage self-hosted na VPS.
+Smoke test completo (login, salvar carrossel, upload MinIO, export PNG) PASS. Detalhe
+abaixo (após o histórico de sessões S1–S6).
 
 ## Concluído
 - ✅ Visão do produto definida (`docs/VISAO.md`).
@@ -152,15 +153,35 @@ self-hosted na VPS já paga. App continua na Vercel. Ver `docs/adr/0002-migracao
   durante a implementação). `db:migrate` + `db:seed` rodados contra a VPS real. **269 testes
   verdes**, build limpo, validação independente sem achado de segurança. Detalhe:
   `docs/sessoes/2026-07-02-adr0002-bloco2-codigo.md`.
-- ⏳ **Bloco 3 — Cutover** (Fase 7, pendente): env vars na Vercel, deploy, smoke test manual
-  no navegador (login → criar carrossel → upload → export PNG), rollback se necessário.
+- ✅ **Bloco 3 — Cutover** (2026-07-03, conduzido): env vars na Vercel (+ `DB_CA_CERT`,
+  achado durante o bloco — ver abaixo), Framework Preset corrigido pra Next.js (projeto
+  Vercel tinha sido criado antes de existir `package.json` no repo), deploy de produção,
+  domínio `carrosselstudio.evoiatecnologia.com` no ar. Smoke test completo (login, criar+
+  salvar carrossel, upload de avatar/imagem no MinIO, export PNG com avatar/imagem
+  renderizados) — **PASS em todos os passos**. Detalhe:
+  `docs/sessoes/2026-07-03-adr0002-bloco3-cutover.md`.
+
+### Achados do Bloco 3 (fora do escopo original do ADR)
+- **Código nunca tinha sido commitado no Git** — só a documentação estava versionada; todo
+  o código de S1–S6 e do Bloco 2 (`src/`, `package.json`, testes etc.) ficou 3 dias como
+  untracked local. Corrigido: commit + push pra `main` antes do cutover (269 testes
+  verdes, build limpo, confirmados antes de commitar).
+- **CA pinado do Postgres não sobrevive a deploy serverless** — `src/db/index.ts` lia
+  `certs/db-ca.pem`, arquivo local fora do git (`.gitignore`), inexistente no ambiente da
+  Vercel. Corrigido com um fix pequeno e isolado: `DB_CA_CERT` (env var com o conteúdo do
+  PEM), com fallback pro arquivo local em dev — validado localmente (conexão real TLS
+  contra a VPS) antes de ir pra produção. Ver `src/lib/env.ts` e `src/db/index.ts`.
 
 ## Próximo passo
-- **Bloco 3 do ADR 0002** (cutover): env vars na Vercel + deploy + smoke test real.
-- **Smokes manuais** no navegador (herdados S3/S4/S5/S6: editar `/settings` → conferir
-  herança em carrossel novo; upload de avatar/imagem no MinIO; export com a nova allowlist).
+- **Manter Neon e Vercel Blob vivos (free tier) por alguns dias** antes de desligar —
+  são o rollback do cutover. Só desligar depois de confiar no novo ambiente sob uso real.
+- **Smokes manuais** herdados de S3/S4/S5/S6 ainda não cobertos pelo smoke do Bloco 3:
+  geração via `/generate` (chamada real à Claude API), herança de identidade em
+  `/settings`.
 - **Deploy (quando o CEO decidir):** decisão Hobby→Pro antes do 1º cliente pagante
   (`docs/RESTRICOES.md`).
+- Limpar `tsconfig.tsbuildinfo` do controle de versão (artefato de build commitado por
+  engano no Bloco 3) — adicionar ao `.gitignore` e remover do índice.
 
 ## Pendências do CEO (necessárias só na implementação)
 - ✅ Chave **Claude API** (Anthropic, billing ativo) — configurada e em uso (S5).
