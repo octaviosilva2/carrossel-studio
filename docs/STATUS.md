@@ -4,10 +4,9 @@
 > `CLAUDE.md` e `docs/VISAO.md`.
 
 ## Última atualização
-2026-07-03 — **ADR 0002 Bloco 3 (cutover) CONCLUÍDA — produto em produção.** App na Vercel
-(`carrosselstudio.evoiatecnologia.com`) apontando pro banco e storage self-hosted na VPS.
-Smoke test completo (login, salvar carrossel, upload MinIO, export PNG) PASS. Detalhe
-abaixo (após o histórico de sessões S1–S6).
+2026-07-03 — **ADR 0003 (correções de segurança pós-auditoria) CONCLUÍDA.** CORS do MinIO
+confirmado correto, headers HTTP de segurança adicionados, rate limit no login implementado
+e validado. Detalhe abaixo (após ADR 0002).
 
 ## Concluído
 - ✅ Visão do produto definida (`docs/VISAO.md`).
@@ -161,6 +160,32 @@ self-hosted na VPS já paga. App continua na Vercel. Ver `docs/adr/0002-migracao
   renderizados) — **PASS em todos os passos**. Detalhe:
   `docs/sessoes/2026-07-03-adr0002-bloco3-cutover.md`.
 
+## ADR 0003 — Correções de segurança para o MVP (CONCLUÍDA 2026-07-03)
+Origem: auditoria de segurança (`dev-agents:analise-seguranca`) rodada logo após o cutover
+da ADR 0002, produto já em produção. Ver `docs/adr/0003-correcoes-seguranca-mvp.md`.
+
+- ✅ **CORS do MinIO** (conduzido, sem código): `MINIO_API_CORS_ALLOW_ORIGIN` confirmado no
+  EasyPanel já em `https://carrosselstudio.evoiatecnologia.com` — nenhuma correção
+  necessária.
+- ✅ **Headers de segurança HTTP**: `next.config.mjs` com `headers()` para todas as rotas
+  (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Strict-Transport-Security: max-age=63072000; includeSubDomains`, sem preload). Commit
+  `a4528c5`.
+- ✅ **Rate limit no login** (esteira `dev-agents:feature` completa — `.work/rate-limit-login/`):
+  tabela nova `login_attempts` (Postgres via Drizzle, migration aditiva não destrutiva,
+  aplicada na VPS de produção), bloqueio temporário por **e-mail e por IP** a partir de 5
+  falhas em 15 minutos (janela deslizante), decisão puramente no Postgres (sem
+  Redis/Upstash). Lógica de decisão isolada em `src/lib/rate-limit.ts` (pura, testada);
+  I/O em `src/lib/login-attempts-repo.ts` (fail-closed na checagem, best-effort na
+  gravação/limpeza). Reset das falhas do e-mail no `authorize` (`src/auth.ts`) após senha
+  confirmada — único ponto que sabe que o login deu certo. Mensagem de erro sempre genérica
+  ("E-mail ou senha inválidos"), idêntica em todos os casos de recusa (anti-enumeração).
+  **296 testes passando** (271 baseline + 25 novos), type-check e build limpos. Validação
+  independente: aprovado, sem achado 🔴 (duas ressalvas 🟡/🟢 — timing side-channel do
+  bloqueio e ESLint não configurado no projeto — registradas como endurecimento futuro, não
+  bloqueiam).
+
 ### Achados do Bloco 3 (fora do escopo original do ADR)
 - **Código nunca tinha sido commitado no Git** — só a documentação estava versionada; todo
   o código de S1–S6 e do Bloco 2 (`src/`, `package.json`, testes etc.) ficou 3 dias como
@@ -182,6 +207,11 @@ self-hosted na VPS já paga. App continua na Vercel. Ver `docs/adr/0002-migracao
   (`docs/RESTRICOES.md`).
 - Limpar `tsconfig.tsbuildinfo` do controle de versão (artefato de build commitado por
   engano no Bloco 3) — adicionar ao `.gitignore` e remover do índice.
+- **Deferido da ADR 0003 (§4, não bloqueia o MVP):** validação de magic bytes no upload de
+  imagem; `avatarUrl` aceitando qualquer HTTPS externo; comentário desatualizado em
+  `carousels.ts:244` citando "Neon serverless". Também deferidos da própria validação do
+  rate limit (🟡/🟢, não bloqueiam): timing side-channel do bloqueio de login; ESLint ainda
+  não configurado no projeto.
 
 ## Pendências do CEO (necessárias só na implementação)
 - ✅ Chave **Claude API** (Anthropic, billing ativo) — configurada e em uso (S5).
