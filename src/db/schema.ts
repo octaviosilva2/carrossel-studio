@@ -99,8 +99,33 @@ export const slides = pgTable(
   ],
 );
 
+// --- login_attempts — tentativas de login com FALHA (rate limit) -------------
+// So falhas sao gravadas. Sucesso NAO gera linha (gera DELETE do email, ver spec).
+// Janela deslizante: a consulta filtra por created_at >= now() - 15min.
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // email normalizado (trim+lowercase). NULL quando a entrada nao tinha email
+    // sintaticamente valido (conta so pro IP — decisao 5).
+    email: text("email"),
+    // IP de origem (primeiro do x-forwarded-for) ou "unknown" (sentinel). NOT NULL.
+    ipAddress: text("ip_address").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // Consulta por e-mail dentro da janela: WHERE email = ? AND created_at >= ?
+    index("login_attempts_email_created_at_idx").on(table.email, table.createdAt),
+    // Consulta por IP dentro da janela: WHERE ip_address = ? AND created_at >= ?
+    index("login_attempts_ip_created_at_idx").on(table.ipAddress, table.createdAt),
+  ],
+);
+
 // Tipos inferidos para consumo tipado nas actions/mapping (select shapes).
 export type UserRow = typeof users.$inferSelect;
 export type ClientRow = typeof clients.$inferSelect;
 export type CarouselRow = typeof carousels.$inferSelect;
 export type SlideRow = typeof slides.$inferSelect;
+export type LoginAttemptRow = typeof loginAttempts.$inferSelect;

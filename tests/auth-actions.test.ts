@@ -25,10 +25,37 @@ const { signInMock, signOutMock } = vi.hoisted(() => ({
   signOutMock: vi.fn(),
 }));
 
+// Fronteira do rate limit (I/O em Postgres). Mockada aqui para nao arrastar
+// @/db/server-only e para isolar o comportamento observavel do login: por padrao
+// a checagem devolve contagem ZERO (abaixo do limite) => o fluxo chega ao signIn;
+// recordFailure e no-op. Testes especificos do rate limit ficam em
+// tests/rate-limit.test.ts (estagio de testes).
+const { countRecentFailuresMock, recordFailureMock } = vi.hoisted(() => ({
+  countRecentFailuresMock: vi.fn(async () => ({ email: 0, ip: 0 })),
+  recordFailureMock: vi.fn(async () => undefined),
+}));
+
+// Fonte do IP: headers() do next/headers. Mockada para nao depender de contexto
+// de request — devolve um header vazio (a action cai para o sentinel "unknown").
+const { headersMock } = vi.hoisted(() => ({
+  headersMock: vi.fn(async () => ({ get: (_name: string) => null })),
+}));
+
 vi.mock("next-auth", () => ({ AuthError: AuthErrorMock }));
 vi.mock("@/auth", () => ({
   signIn: (...args: unknown[]) => signInMock(...args),
   signOut: (...args: unknown[]) => signOutMock(...args),
+}));
+vi.mock("next/headers", () => ({
+  // headersMock tem aridade zero (vi.fn infere a assinatura da fn passada), entao
+  // repassar `...args` viola a aridade no tsc (TS2556). Nenhum teste inspeciona os
+  // args de headers() — chama sem repassar. Mesmo motivo nos mocks do repo abaixo.
+  headers: () => headersMock(),
+}));
+vi.mock("@/lib/login-attempts-repo", () => ({
+  countRecentFailures: () => countRecentFailuresMock(),
+  recordFailure: () => recordFailureMock(),
+  clearFailuresForEmail: vi.fn(async () => undefined),
 }));
 
 import { signInAction, signOutAction } from "@/lib/actions/auth";
@@ -44,6 +71,14 @@ function loginForm(email: unknown, password: unknown): FormData {
 beforeEach(() => {
   signInMock.mockReset();
   signOutMock.mockReset();
+  // Restaura os defaults do rate limit: contagem zero (abaixo do limite) e
+  // record/headers no-op — cada teste parte de "nao bloqueado".
+  countRecentFailuresMock.mockReset();
+  countRecentFailuresMock.mockResolvedValue({ email: 0, ip: 0 });
+  recordFailureMock.mockReset();
+  recordFailureMock.mockResolvedValue(undefined);
+  headersMock.mockReset();
+  headersMock.mockResolvedValue({ get: (_name: string) => null });
 });
 
 describe("signInAction — validação de borda (AC 22)", () => {

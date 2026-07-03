@@ -10,6 +10,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { clearFailuresForEmail } from "@/lib/login-attempts-repo";
+import { normalizeEmail } from "@/lib/rate-limit";
 
 // Schema das credenciais recebidas do form de login (borda).
 const credentialsSchema = z.object({
@@ -46,6 +48,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const passwordOk = await compare(password, user.passwordHash);
         if (!passwordOk) return null;
+
+        // Login bem-sucedido: unico ponto que sabe que a senha bateu. Zera as
+        // falhas do e-mail (reset da janela — decisao 4). Best-effort: se o DELETE
+        // falhar, loga internamente e NAO impede o login (o usuario ja provou a
+        // senha; as falhas antigas saem sozinhas da janela em <=15 min). Usa a
+        // MESMA normalizacao da contagem/gravacao para a chave bater exatamente.
+        await clearFailuresForEmail(normalizeEmail(email));
 
         return { id: user.id, email: user.email, name: user.name };
       },

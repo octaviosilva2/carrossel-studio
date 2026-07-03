@@ -8,6 +8,13 @@
       "when": 1782925302297,
       "tag": "0000_damp_energizer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783094800947,
+      "tag": "0001_loose_cable",
+      "breakpoints": true
     }
   ]
 }
