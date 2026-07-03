@@ -25,6 +25,10 @@ const envSchema = z.object({
   // Credenciais S3 — segredo. Nunca logadas (so o nome da chave em erro de env).
   S3_ACCESS_KEY: z.string().min(1, "S3_ACCESS_KEY ausente"),
   S3_SECRET_KEY: z.string().min(1, "S3_SECRET_KEY ausente"),
+  // CA pinado do Postgres (conteudo PEM), para ambientes sem filesystem local
+  // persistente (Vercel). Opcional: quando ausente, src/db/index.ts cai para o
+  // arquivo certs/db-ca.pem (uso local/dev).
+  DB_CA_CERT: z.string().optional(),
 });
 
 // Parse na carga do modulo. Erro de validacao => throw com mensagem util.

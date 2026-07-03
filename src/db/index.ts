@@ -11,12 +11,15 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { env } from "@/lib/env";
 import * as schema from "./schema";
 
-// CA pinado do Postgres da VPS. Caminho FIXO relativo ao cwd do processo — nao
-// parametrizado por env de proposito (YAGNI: a story e o .gitignore assumem
-// certs/db-ca.pem). Se o arquivo faltar, readFileSync lanca ENOENT AQUI, na carga
-// do modulo — falha clara e INTENCIONAL no boot: nunca cair pra conexao sem TLS.
-// Nao capturar nem silenciar esse erro.
-const ca = readFileSync(path.join(process.cwd(), "certs", "db-ca.pem"));
+// CA pinado do Postgres da VPS. Em produção (Vercel), o filesystem do deploy não
+// tem certs/ (fora do git, .gitignore) — o CA vem da env DB_CA_CERT (conteúdo PEM
+// setado no painel). Em dev local, sem essa env, cai pro arquivo certs/db-ca.pem.
+// Se nenhum dos dois existir, readFileSync lança ENOENT AQUI, na carga do módulo —
+// falha clara e INTENCIONAL no boot: nunca cair pra conexão sem TLS. Não capturar
+// nem silenciar esse erro.
+const ca = env.DB_CA_CERT
+  ? Buffer.from(env.DB_CA_CERT)
+  : readFileSync(path.join(process.cwd(), "certs", "db-ca.pem"));
 
 // Remove o `sslmode` da URL para o objeto `ssl` abaixo (CA pinado) ser a UNICA
 // fonte da config TLS. No pg 8.22, `sslmode=require` na connection string e

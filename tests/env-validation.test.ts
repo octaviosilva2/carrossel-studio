@@ -130,6 +130,21 @@ describe("env.ts — validacao das env vars do servidor (falha fechado)", () => 
     expect(error?.message).toContain("S3_REGION");
   });
 
+  it("DB_CA_CERT e opcional: ausente NAO impede o boot", async () => {
+    setEnv({}); // VALID_ENV nao tem DB_CA_CERT
+    expect(process.env.DB_CA_CERT).toBeUndefined();
+    const error = await loadEnvModuleError();
+    expect(error).toBeNull();
+  });
+
+  it("DB_CA_CERT presente: carrega sem lancar e expoe o valor", async () => {
+    const pem = "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----";
+    setEnv({ DB_CA_CERT: pem });
+    vi.resetModules();
+    const mod = (await import("@/lib/env")) as { env: Record<string, string> };
+    expect(mod.env.DB_CA_CERT).toBe(pem);
+  });
+
   it("BLOB_READ_WRITE_TOKEN foi removido: sua ausencia NAO impede o boot", async () => {
     // AC: env.ts remove BLOB_READ_WRITE_TOKEN. Com as 6 S3_* presentes e sem o
     // token antigo, o boot deve passar (o token nao e mais exigido).
