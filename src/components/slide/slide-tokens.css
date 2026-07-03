@@ -1,0 +1,19 @@
+/* Tokens de COR do slide, por tema. Valores EXATOS de docs/REFERENCIA-VISUAL.md.
+   Escopados ao .slide (data-theme) para NAO se misturarem com o dark mode da
+   plataforma (shadcn). Estes tokens sao imutaveis — sao o produto, nao a UI. */
+
+.slide[data-theme="light"] {
+  --slide-bg: #ffffff;
+  --slide-text: #14171a;
+  --slide-handle: #536471;
+  --slide-badge: #1d9bf0;
+  --slide-img-border: #cfd9de;
+}
+
+.slide[data-theme="dark"] {
+  --slide-bg: #000000;
+  --slide-text: #ffffff;
+  --slide-handle: #71767b;
+  --slide-badge: #1d9bf0;
+  --slide-img-border: #2f3336;
+}

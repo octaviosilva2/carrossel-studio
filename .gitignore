@@ -12,6 +12,9 @@ build/
 .env.*
 !.env.example
 
+# Certificados TLS locais (pinning do Postgres self-hosted — NUNCA commitar)
+certs/
+
 # Vercel
 .vercel/
 
