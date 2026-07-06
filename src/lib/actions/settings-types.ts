@@ -41,3 +41,37 @@ export interface UpdateClientSettingsResult {
   ok: true;
   updatedAt: string;
 }
+
+/**
+ * Retorno de getClientSettings: identidade + estado de onboarding. Interface
+ * SEPARADA de ClientSettings (nao estende o schema Zod de entrada) — onboarding
+ * e um campo derivado/servidor, nunca faz parte do payload que o form envia em
+ * updateClientSettings.
+ */
+export interface ClientSettingsWithOnboarding extends ClientSettings {
+  /** null = onboarding ainda nao concluido. */
+  onboardingCompletedAt: string | null;
+}
+
+/** Resultado de completeOnboarding. */
+export interface CompleteOnboardingResult {
+  ok: true;
+  updatedAt: string;
+  onboardingCompletedAt: string;
+}
+
+/**
+ * Payload de changePassword. Nova senha com o mesmo piso minimo usado em
+ * createClientAccount (admin-types.ts) — nao ha padrao de forca preexistente
+ * no projeto alem de "nao vazio".
+ */
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Senha atual obrigatória"),
+  newPassword: z.string().min(8, "Nova senha deve ter ao menos 8 caracteres"),
+});
+
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+
+export interface ChangePasswordResult {
+  ok: true;
+}

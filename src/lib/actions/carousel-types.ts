@@ -43,6 +43,10 @@ export interface CarouselListItem {
   id: string;
   title: string;
   updatedAt: string;
+  createdAt: string;
+  slideCount: number;
+  /** Snippet do body do slide na position 0 (truncado ~60 chars), para thumbnail textual. */
+  firstSlideBody: string;
 }
 
 export interface DeleteCarouselResult {

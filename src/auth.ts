@@ -56,22 +56,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // MESMA normalizacao da contagem/gravacao para a chave bater exatamente.
         await clearFailuresForEmail(normalizeEmail(email));
 
-        return { id: user.id, email: user.email, name: user.name };
+        return { id: user.id, email: user.email, name: user.name, role: user.role };
       },
     }),
   ],
   callbacks: {
-    // Injeta o id do usuario no token na primeira emissao (quando `user` existe).
+    // Injeta id + role no token na primeira emissao (quando `user` existe).
     jwt({ token, user }) {
       if (user?.id) {
         token.uid = user.id;
+        token.role = user.role;
       }
       return token;
     },
-    // Expoe session.user.id a partir do token para o resto da app consumir.
+    // Expoe session.user.id/role a partir do token para o resto da app consumir.
     session({ session, token }) {
       if (typeof token.uid === "string") {
         session.user.id = token.uid;
+      }
+      if (typeof token.role === "string") {
+        session.user.role = token.role;
       }
       return session;
     },

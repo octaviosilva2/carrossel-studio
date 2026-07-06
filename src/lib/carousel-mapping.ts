@@ -158,6 +158,18 @@ export function themeToOverride(
 
 // --- EditorSlides -> linhas persistiveis --------------------------------------
 
+// --- Snippet de texto (listagem) ----------------------------------------------
+
+/**
+ * Trunca um texto em no maximo `maxLength` caracteres (apos trim), acrescentando
+ * "…" quando corta. Usado no snippet textual da listagem de carrosseis. Puro.
+ */
+export function truncateSnippet(text: string, maxLength: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength).trimEnd()}…`;
+}
+
 /**
  * Converte os slides do editor em linhas persistiveis na ORDEM do array:
  * position = indice (0-based). Base do replace-all do saveCarousel.

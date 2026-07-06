@@ -10,6 +10,8 @@ export interface AuthenticatedUser {
   id: string;
   email?: string | null;
   name?: string | null;
+  /** 'admin' | 'client'; ausente em sessoes de JWT emitidos antes do claim existir. */
+  role?: string;
 }
 
 /**
@@ -25,5 +27,29 @@ export async function requireUser(): Promise<AuthenticatedUser> {
     id: session.user.id,
     email: session.user.email,
     name: session.user.name,
+    role: session.user.role,
+  };
+}
+
+/**
+ * Exige um usuario logado com role 'admin'. Falha fechado em duas camadas: sem
+ * sessao => /login; sessao valida mas sem role admin => /carousels (area do
+ * client — nao existe /dashboard ainda nesta fase; ajustar quando o front criar
+ * a rota). redirect() lanca — o codigo apos a chamada so roda autenticado E
+ * autorizado como admin.
+ */
+export async function requireAdmin(): Promise<AuthenticatedUser> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+  if (session.user.role !== "admin") {
+    redirect("/carousels");
+  }
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    role: session.user.role,
   };
 }
