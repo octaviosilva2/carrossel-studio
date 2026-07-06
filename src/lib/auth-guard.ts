@@ -33,9 +33,8 @@ export async function requireUser(): Promise<AuthenticatedUser> {
 
 /**
  * Exige um usuario logado com role 'admin'. Falha fechado em duas camadas: sem
- * sessao => /login; sessao valida mas sem role admin => /carousels (area do
- * client — nao existe /dashboard ainda nesta fase; ajustar quando o front criar
- * a rota). redirect() lanca — o codigo apos a chamada so roda autenticado E
+ * sessao => /login; sessao valida mas sem role admin => /dashboard (area do
+ * client). redirect() lanca — o codigo apos a chamada so roda autenticado E
  * autorizado como admin.
  */
 export async function requireAdmin(): Promise<AuthenticatedUser> {
@@ -44,7 +43,7 @@ export async function requireAdmin(): Promise<AuthenticatedUser> {
     redirect("/login");
   }
   if (session.user.role !== "admin") {
-    redirect("/carousels");
+    redirect("/dashboard");
   }
   return {
     id: session.user.id,

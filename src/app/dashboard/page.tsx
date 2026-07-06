@@ -3,16 +3,17 @@ import { NewCarouselButton } from "@/components/app-shell/new-carousel-button";
 import { requireUser } from "@/lib/auth-guard";
 import { listCarousels } from "@/lib/actions/carousels";
 import { isAdminUser } from "@/lib/mock-redesign";
-import { HistoryClient } from "./history-client";
+import { DashboardClient } from "./dashboard-client";
 
-// Nao cachear: a lista reflete o estado persistido mais recente do dono.
+// Nao cachear: contadores/recentes/atividade refletem o estado persistido mais recente.
 export const dynamic = "force-dynamic";
 
 /**
- * Histórico (redesign da antiga "Meus carrosséis"): busca + pills de período
- * sobre a lista real do dono (listCarousels). requireUser() barra deslogado.
+ * Dashboard — nova home pos-login (redesign). Server Component: requireUser()
+ * barra deslogado; listCarousels() traz os carrosseis do dono (real, sem
+ * mock). Os calculos de contadores/atividade rodam no Client (DashboardClient).
  */
-export default async function CarouselsPage() {
+export default async function DashboardPage() {
   const user = await requireUser();
   const carousels = await listCarousels();
   const isAdmin = isAdminUser(user.role);
@@ -24,11 +25,11 @@ export default async function CarouselsPage() {
       isAdmin={isAdmin}
     >
       <header className="sticky top-14 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 px-5 backdrop-blur lg:top-0">
-        <h1 className="text-sm font-semibold">Histórico</h1>
+        <h1 className="text-sm font-semibold">Dashboard</h1>
         <NewCarouselButton />
       </header>
 
-      <HistoryClient carousels={carousels} />
+      <DashboardClient carousels={carousels} />
     </AppShell>
   );
 }

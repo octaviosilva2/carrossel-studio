@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 import type { EditorAction, EditorSlide } from "@/lib/editor-state";
 import { validateImageFile } from "@/lib/image-upload";
 import { uploadImageToBlob } from "@/lib/blob-upload";
@@ -31,9 +32,11 @@ export function SlideEditor({ slide, dispatch }: SlideEditorProps) {
   const [imageError, setImageError] = useState<string>("");
   // Upload em voo: desabilita o botao e evita duplo envio.
   const [isUploading, setIsUploading] = useState(false);
+  // Arquivo validado aguardando o passo visual de "ajustar imagem" (crop mock).
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  async function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     // Cancelou o picker, ou nao ha slide alvo: no-op.
     if (!file || !slide) return;
@@ -47,20 +50,32 @@ export function SlideEditor({ slide, dispatch }: SlideEditorProps) {
       return;
     }
 
+    setImageError("");
+    // Abre o modal de "ajustar imagem" (visual) antes do upload real.
+    setPendingImageFile(file);
+    e.target.value = "";
+  }
+
+  /** Confirmado no modal de ajuste: segue com o upload REAL do arquivo original. */
+  async function handleCropConfirm() {
+    if (!pendingImageFile || !slide) return;
+
     // Envia ao Vercel Blob (upload real, S3). Em sucesso grava a URL https; em
     // falha mostra erro inline e NAO altera o estado (imagem anterior permanece).
     setIsUploading(true);
-    setImageError("");
-    const result = await uploadImageToBlob(file);
+    const result = await uploadImageToBlob(pendingImageFile);
     setIsUploading(false);
-    // Permite reenviar o mesmo arquivo apos remover.
-    e.target.value = "";
+    setPendingImageFile(null);
 
     if (result.ok) {
       dispatch({ type: "SET_SLIDE_IMAGE", id: slide.id, imageUrl: result.url });
     } else {
       setImageError(result.error);
     }
+  }
+
+  function handleCropCancel() {
+    setPendingImageFile(null);
   }
 
   function handleRemoveImage() {
@@ -149,6 +164,14 @@ export function SlideEditor({ slide, dispatch }: SlideEditorProps) {
           </>
         )}
       </CardContent>
+
+      <ImageCropDialog
+        file={pendingImageFile}
+        shape="rect"
+        onCancel={handleCropCancel}
+        onConfirm={handleCropConfirm}
+        isBusy={isUploading}
+      />
     </Card>
   );
 }

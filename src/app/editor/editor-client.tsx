@@ -1,12 +1,21 @@
 "use client";
 
-import { useReducer, useRef, useState, useTransition } from "react";
-import Link from "next/link";
-import { ArrowLeft, Check, Download, FileArchive, Save } from "lucide-react";
+import { useEffect, useRef, useState, useReducer, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Check, Download, FileArchive, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import {
   editorReducer,
   DEFAULT_CAROUSEL_TITLE,
@@ -20,17 +29,16 @@ import {
   zipFileName,
 } from "@/lib/export-png";
 import type { SlideData } from "@/components/slide/types";
-import { saveCarousel } from "@/lib/actions/carousels";
+import { deleteCarousel, saveCarousel } from "@/lib/actions/carousels";
 import type { SaveCarouselInput } from "@/lib/actions/carousel-types";
+import { AssistantPanel } from "./assistant-panel";
 import { ExportCapture, type ExportCaptureHandle } from "./export-capture";
 import { IdentityPanel } from "./identity-panel";
 import { SlideNav } from "./slide-nav";
 import { SlideEditor } from "./slide-editor";
 import { ThemePreview } from "./theme-preview";
 
-// Estado visual do salvamento (union discriminada — impede combinacoes invalidas).
-// `idle` = sem acao recente; `saving` = em voo; `saved` = sucesso; `error` = falha
-// (o trabalho em memoria e preservado — o usuario pode tentar de novo).
+// Estado visual do autosave (union discriminada — impede combinacoes invalidas).
 type SaveState =
   | { status: "idle" }
   | { status: "saving" }
@@ -38,8 +46,6 @@ type SaveState =
   | { status: "error"; message: string };
 
 // Estado visual do export (S4) — union discriminada, mesmo padrao do SaveState.
-// `kind` distingue ZIP (todos os slides) de single (o slide selecionado), para
-// rotular o botao certo como "Gerando…". Em erro, mensagem generica ao usuario.
 type ExportState =
   | { status: "idle" }
   | { status: "working"; kind: "zip" | "single" }
@@ -48,6 +54,9 @@ type ExportState =
 
 // Mensagem generica de falha (nao vaza detalhe tecnico — seguranca-baseline).
 const EXPORT_ERROR_MESSAGE = "Falha ao exportar. Tente novamente.";
+
+// Debounce do autosave: espera essa pausa na digitacao antes de persistir.
+const AUTOSAVE_DEBOUNCE_MS = 1500;
 
 // Aguarda o React pintar os nos de captura antes de ler os refs. Dois frames:
 // o primeiro agenda apos o proximo paint, o segundo garante que o layout aplicou.
@@ -63,15 +72,20 @@ interface EditorClientProps {
 }
 
 /**
- * Editor manual de carrossel (S2 + persistencia S3). Client Component dono do
- * useReducer, agora semeado pelo estado carregado do banco (`initialState`).
- * Ganha campo Titulo (SET_TITLE) e botao Salvar (saveCarousel), com feedback
- * visual salvando -> salvo -> erro.
+ * Editor manual de carrossel (redesign): layout 3 colunas (assistente mock |
+ * slides manuais | preview), autosave por debounce (substitui o botao Salvar
+ * manual) e exclusao com confirmacao. O useReducer + os paineis de slide
+ * (SlideNav/SlideEditor/IdentityPanel) sao os MESMOS de antes — so o layout e
+ * o gatilho de salvar mudaram.
  */
 export function EditorClient({ initialState }: EditorClientProps) {
+  const router = useRouter();
   const [state, dispatch] = useReducer(editorReducer, initialState);
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [isPending, startTransition] = useTransition();
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Estado do export (S4). captureData != null => o <ExportCapture> esta montado
   // (sob demanda, so durante um export). Concentra o custo (fetch/canvas) no
@@ -91,44 +105,30 @@ export function EditorClient({ initialState }: EditorClientProps) {
   const title = state.title ?? DEFAULT_CAROUSEL_TITLE;
 
   /**
-   * Monta o SaveCarouselInput a partir do estado atual e persiste. So chama a
-   * action se houver carouselId (o wrapper server garante que sempre ha um).
-   * Em erro NAO afirma "salvo" e preserva o estado do editor (AC edge).
+   * Monta o SaveCarouselInput a partir do estado atual e persiste. Chamada
+   * pelo autosave (debounce abaixo) — nao ha mais botao "Salvar" manual.
    */
-  function handleSave() {
-    const carouselId = state.carouselId;
-    if (!carouselId) {
-      // Guarda defensiva: sem id nao ha o que salvar (nao deveria ocorrer).
-      setSaveState({
-        status: "error",
-        message: "Carrossel sem identificador. Recarregue a página.",
-      });
-      return;
-    }
+  function doSave(current: EditorState) {
+    const carouselId = current.carouselId;
+    // Guarda defensiva: sem id nao ha o que salvar (nao deveria ocorrer — o
+    // wrapper server sempre garante um id antes de montar o editor).
+    if (!carouselId) return;
+    // saveCarousel exige ao menos 1 slide (Zod .min(1)); autosave so tenta
+    // quando ha slide (o estado vazio nao acontece sem o usuario remover tudo,
+    // e nesse caso simplesmente pulamos o autosave ate haver 1+ de novo).
+    if (current.slides.length === 0) return;
 
-    // saveCarousel exige ao menos 1 slide (Zod .min(1)). Sem slides, aborta cedo
-    // com erro claro em vez de deixar a validacao do servidor estourar.
-    if (state.slides.length === 0) {
-      setSaveState({
-        status: "error",
-        message: "Adicione ao menos um slide antes de salvar.",
-      });
-      return;
-    }
-
-    // Monta o payload conforme SaveCarouselSchema: imageUrl so quando houver
-    // (slides sem imagem OMITEM o campo; o schema aceita url? opcional).
     const input: SaveCarouselInput = {
       id: carouselId,
-      title,
-      theme: state.theme,
+      title: current.title ?? DEFAULT_CAROUSEL_TITLE,
+      theme: current.theme,
       identity: {
-        name: state.identity.name,
-        handle: state.identity.handle,
-        avatarUrl: state.identity.avatarUrl,
-        verified: state.identity.verified,
+        name: current.identity.name,
+        handle: current.identity.handle,
+        avatarUrl: current.identity.avatarUrl,
+        verified: current.identity.verified,
       },
-      slides: state.slides.map((slide) =>
+      slides: current.slides.map((slide) =>
         slide.imageUrl
           ? { body: slide.body, imageUrl: slide.imageUrl }
           : { body: slide.body },
@@ -142,7 +142,7 @@ export function EditorClient({ initialState }: EditorClientProps) {
         setSaveState({ status: "saved" });
       } catch {
         // Falha de rede/banco/validacao: mostra erro, NAO afirma salvo, mantem
-        // o trabalho em memoria intacto (permite nova tentativa).
+        // o trabalho em memoria intacto (permite nova tentativa no proximo autosave).
         setSaveState({
           status: "error",
           message: "Falha ao salvar. Tente novamente.",
@@ -150,6 +150,19 @@ export function EditorClient({ initialState }: EditorClientProps) {
       }
     });
   }
+
+  // Autosave por debounce: espera uma pausa na edicao antes de persistir.
+  // Pula a primeira execucao (montagem) — o estado inicial ja veio do banco.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const timer = setTimeout(() => doSave(state), AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   const isSaving = saveState.status === "saving" || isPending;
   const isExporting = exportState.status === "working";
@@ -246,48 +259,150 @@ export function EditorClient({ initialState }: EditorClientProps) {
     }
   }
 
+  /** Exclui o carrossel (action real) e volta ao Histórico. */
+  function handleDelete() {
+    const carouselId = state.carouselId;
+    if (!carouselId) return;
+
+    setIsDeleting(true);
+    startTransition(async () => {
+      try {
+        await deleteCarousel(carouselId);
+        router.push("/carousels");
+      } catch {
+        setIsDeleting(false);
+        setIsDeleteOpen(false);
+      }
+    });
+  }
+
   return (
-    <main className="min-h-screen bg-background px-6 py-10">
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-3">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Editor de carrossel
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Monte o carrossel slide a slide com preview ao vivo.
-              </p>
-            </div>
+    <div className="flex min-h-full flex-col">
+      {/* Cabecalho: titulo editavel + status do autosave + excluir. */}
+      <header className="sticky top-14 z-10 flex h-14 flex-wrap items-center gap-3 border-b border-border bg-background/80 px-5 backdrop-blur lg:top-0">
+        <Input
+          value={title}
+          placeholder={DEFAULT_CAROUSEL_TITLE}
+          aria-label="Título do carrossel"
+          onChange={(e) => dispatch({ type: "SET_TITLE", title: e.target.value })}
+          className="h-8 max-w-xs border-transparent bg-transparent px-1.5 text-sm font-semibold shadow-none hover:border-input focus-visible:border-input"
+        />
 
-            {/* Titulo do carrossel — editavel, ligado a SET_TITLE. */}
-            <div className="max-w-sm space-y-1.5">
-              <Label htmlFor="carousel-title">Título do carrossel</Label>
-              <Input
-                id="carousel-title"
-                value={title}
-                placeholder={DEFAULT_CAROUSEL_TITLE}
-                onChange={(e) =>
-                  dispatch({ type: "SET_TITLE", title: e.target.value })
-                }
-              />
-            </div>
-          </div>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          {saveState.status === "saving" || isPending ? (
+            <>
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+              Salvando…
+            </>
+          ) : saveState.status === "error" ? (
+            <span role="alert" className="text-destructive">
+              {saveState.message}
+            </span>
+          ) : (
+            <>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Salvo
+            </>
+          )}
+        </span>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/carousels">
-                <ArrowLeft className="h-4 w-4" />
-                Meus carrosséis
-              </Link>
-            </Button>
-
-            {/* Baixar ZIP — todos os slides. Desabilitado sem slides, salvando
-                ou exportando (evita exports concorrentes). */}
+        <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+          <DialogTrigger asChild>
             <Button
               type="button"
-              variant="outline"
+              variant="destructive"
               size="sm"
+              className="ml-auto"
+              disabled={!state.carouselId}
+            >
+              <Trash2 className="h-4 w-4" />
+              Excluir
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Excluir carrossel</DialogTitle>
+              <DialogDescription>
+                Tem certeza que quer excluir &quot;{title}&quot;? Essa ação não pode
+                ser desfeita.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsDeleteOpen(false)}
+                disabled={isDeleting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Excluindo…" : "Excluir"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </header>
+
+      {/* Nos de captura off-screen — montados SOB DEMANDA (captureData != null)
+          so durante um export. Nao afeta a UI visivel nem o preview. */}
+      {captureData !== null ? (
+        <ExportCapture ref={captureRef} slides={captureData} />
+      ) : null}
+
+      {/* Layout 3 colunas: assistente | slides manuais | preview. Empilha
+          abaixo de lg na ordem slides -> preview -> assistente. */}
+      <div className="flex flex-1 flex-col lg:h-[calc(100vh-3.5rem)] lg:flex-row lg:overflow-hidden">
+        {/* ESQUERDA: assistente de IA (mock, sempre visivel). */}
+        <div className="order-3 h-80 shrink-0 border-t border-border lg:order-1 lg:h-auto lg:w-72 lg:border-r lg:border-t-0">
+          <AssistantPanel />
+        </div>
+
+        {/* CENTRO: slides manuais (SlideNav + SlideEditor, logica inalterada). */}
+        <div className="order-1 min-w-0 flex-1 space-y-4 overflow-y-auto p-4 lg:order-2">
+          <SlideNav
+            slides={state.slides}
+            selectedSlideId={state.selectedSlideId}
+            dispatch={dispatch}
+          />
+          <SlideEditor slide={selectedSlide} dispatch={dispatch} />
+        </div>
+
+        {/* DIREITA: preview (maior) + identidade + exportacao. */}
+        <div className="order-2 shrink-0 space-y-4 overflow-y-auto border-t border-border p-4 lg:order-3 lg:w-[460px] lg:border-l lg:border-t-0">
+          <ThemePreview
+            identity={state.identity}
+            theme={state.theme}
+            slides={state.slides}
+            slide={selectedSlide}
+            dispatch={dispatch}
+          />
+
+          <IdentityPanel identity={state.identity} dispatch={dispatch} />
+
+          {/* Feedback do export (aria-live). */}
+          <div aria-live="polite" className="min-h-[1.25rem]">
+            {exportState.status === "done" ? (
+              <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                Exportado.
+              </p>
+            ) : null}
+            {exportState.status === "error" ? (
+              <p role="alert" className="text-sm text-destructive">
+                {exportState.message}
+              </p>
+            ) : null}
+          </div>
+
+          <div className={cn("flex gap-2")}>
+            <Button
+              type="button"
+              className="flex-1 justify-center"
               onClick={handleExportZip}
               disabled={state.slides.length === 0 || isExporting || isSaving}
             >
@@ -298,17 +413,12 @@ export function EditorClient({ initialState }: EditorClientProps) {
               )}
               {exportState.status === "working" && exportState.kind === "zip"
                 ? "Gerando ZIP…"
-                : exportState.status === "done" && exportState.kind === "zip"
-                  ? "Baixado"
-                  : "Baixar ZIP"}
+                : "Baixar todos (ZIP)"}
             </Button>
-
-            {/* Baixar slide — o PNG do slide selecionado. Desabilitado sem slide
-                selecionado ou durante qualquer export. */}
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              className="flex-1 justify-center"
               onClick={handleExportSlide}
               disabled={selectedSlide === null || isExporting || isSaving}
             >
@@ -319,86 +429,11 @@ export function EditorClient({ initialState }: EditorClientProps) {
               )}
               {exportState.status === "working" && exportState.kind === "single"
                 ? "Gerando…"
-                : exportState.status === "done" && exportState.kind === "single"
-                  ? "Baixado"
-                  : "Baixar slide"}
+                : "Este slide (PNG)"}
             </Button>
-
-            {/* Salvar — desabilitado enquanto em voo. */}
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-            >
-              {saveState.status === "saved" && !isSaving ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {isSaving ? "Salvando…" : "Salvar"}
-            </Button>
-          </div>
-        </header>
-
-        {/* Feedback do salvamento (aria-live: leitores anunciam a mudanca). */}
-        <div aria-live="polite" className="mb-6 min-h-[1.25rem]">
-          {saveState.status === "saved" && !isSaving ? (
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">
-              Salvo.
-            </p>
-          ) : null}
-          {saveState.status === "error" ? (
-            <p role="alert" className="text-sm text-destructive">
-              {saveState.message}
-            </p>
-          ) : null}
-        </div>
-
-        {/* Feedback do export (aria-live gemea da de save). */}
-        <div aria-live="polite" className="mb-6 min-h-[1.25rem]">
-          {exportState.status === "done" ? (
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">
-              Exportado.
-            </p>
-          ) : null}
-          {exportState.status === "error" ? (
-            <p role="alert" className="text-sm text-destructive">
-              {exportState.message}
-            </p>
-          ) : null}
-        </div>
-
-        {/* Nos de captura off-screen — montados SOB DEMANDA (captureData != null)
-            so durante um export. Nao afeta a UI visivel nem o preview. */}
-        {captureData !== null ? (
-          <ExportCapture ref={captureRef} slides={captureData} />
-        ) : null}
-
-        {/* Layout: controles a esquerda, preview grudado a direita (desktop). */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
-          {/* Coluna de controles */}
-          <div className="space-y-6">
-            <IdentityPanel identity={state.identity} dispatch={dispatch} />
-            <SlideNav
-              slides={state.slides}
-              selectedSlideId={state.selectedSlideId}
-              dispatch={dispatch}
-            />
-            <SlideEditor slide={selectedSlide} dispatch={dispatch} />
-          </div>
-
-          {/* Coluna de preview (fica no topo ao rolar em telas largas) */}
-          <div className="lg:sticky lg:top-10 lg:self-start">
-            <ThemePreview
-              identity={state.identity}
-              theme={state.theme}
-              slide={selectedSlide}
-              dispatch={dispatch}
-            />
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
