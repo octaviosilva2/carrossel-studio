@@ -123,6 +123,15 @@ confirmação explícita do Octavio.
   CEO — mas a action `generateCarousel` e seus testes permanecem intactos,
   disponíveis para uma futura integração com o Assistente de IA do editor.
 
+### Achado na aplicação da migration em produção
+A migration `role text DEFAULT 'client' NOT NULL` aplica o default a **todas** as
+linhas existentes — inclusive a conta do próprio CEO (`SEED_ADMIN_EMAIL`), que
+ficou `role='client'` até ser promovida manualmente (`UPDATE users SET
+role='admin' WHERE email=...`) logo após a migration rodar na VPS. Verificado
+via query direta em produção antes e depois do UPDATE. **Follow-up sugerido:**
+um script `scripts/promote-admin.mjs` (mesmo padrão de `create-client.mjs`) para
+não depender de UPDATE manual da próxima vez que precisar promover alguém.
+
 ---
 
 ## 5. Próximos passos após esta ADR fechar
