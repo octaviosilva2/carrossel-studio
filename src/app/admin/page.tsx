@@ -1,32 +1,25 @@
-import { redirect } from "next/navigation";
-
 import { AppShell } from "@/components/app-shell/app-shell";
-import { requireUser } from "@/lib/auth-guard";
-import { isAdminUser, listClientsMock } from "@/lib/mock-redesign";
+import { requireAdmin } from "@/lib/auth-guard";
+import { listClientsAdmin } from "@/lib/actions/admin";
 import { AdminClient } from "./admin-client";
 
-// Nao cachear: decisao de acesso depende da sessao corrente.
+// Nao cachear: decisao de acesso e a lista de clientes dependem da sessao/estado atual.
 export const dynamic = "force-dynamic";
 
 /**
- * Painel de administração (novo, redesign) — só CEO/admin. `isAdminUser()` é
- * MOCK (ver src/lib/mock-redesign.ts): não existe papel de usuário no schema
- * ainda, então esta proteção server-side é provisória; a de verdade fica no
- * backend quando o campo existir. `listClientsMock()` também é mock — não há
- * conceito de "1 admin gerencia N clientes" implementado hoje.
+ * Painel de administração — só CEO/admin. `requireAdmin()` falha fechado
+ * (redireciona pra /dashboard sem role admin) e `listClientsAdmin()` traz os
+ * clientes reais do banco (ver src/lib/actions/admin.ts).
  */
 export default async function AdminPage() {
-  const user = await requireUser();
-  const isAdmin = isAdminUser(user.role);
-  if (!isAdmin) {
-    redirect("/dashboard");
-  }
+  const user = await requireAdmin();
+  const clients = await listClientsAdmin();
 
   return (
     <AppShell
       userName={user.name ?? user.email ?? "Usuário"}
       userEmail={user.email ?? ""}
-      isAdmin={isAdmin}
+      isAdmin
     >
       <header className="sticky top-14 z-10 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-5 backdrop-blur lg:top-0">
         <h1 className="text-sm font-semibold">Admin</h1>
@@ -35,7 +28,7 @@ export default async function AdminPage() {
         </span>
       </header>
 
-      <AdminClient initialClients={listClientsMock()} />
+      <AdminClient initialClients={clients} />
     </AppShell>
   );
 }

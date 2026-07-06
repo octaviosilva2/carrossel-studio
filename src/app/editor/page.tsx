@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { requireUser } from "@/lib/auth-guard";
 import { createCarousel, getCarousel } from "@/lib/actions/carousels";
-import { isAdminUser } from "@/lib/mock-redesign";
 import { EditorClient } from "./editor-client";
 
 // Nao cachear: o editor sempre reflete o estado persistido mais recente.
@@ -46,7 +45,7 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
     initialState.title = rawTitle;
   }
 
-  const isAdmin = isAdminUser(user.role);
+  const isAdmin = user.role === "admin";
 
   return (
     <AppShell

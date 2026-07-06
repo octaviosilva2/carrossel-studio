@@ -4,6 +4,12 @@
 > `CLAUDE.md` e `docs/VISAO.md`.
 
 ## Última atualização
+2026-07-06 — **ADR 0004 (redesign de UI/UX) EM EXECUÇÃO.** Mockup aprovado
+(`docs/mockups/redesign-v1.html`), implementação real rodando em 2 sessões paralelas
+isoladas por `git worktree` (`feature/redesign-backend` e `feature/redesign-frontend`).
+Merge e teste pós-merge pendentes. Ver `docs/adr/0004-redesign-ui-ux.md` e
+`docs/sessoes/2026-07-06-adr0004-redesign-ui-ux.md`.
+
 2026-07-03 — **ADR 0003 (correções de segurança pós-auditoria) CONCLUÍDA.** CORS do MinIO
 confirmado correto, headers HTTP de segurança adicionados, rate limit no login implementado
 e validado. Detalhe abaixo (após ADR 0002).

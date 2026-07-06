@@ -124,7 +124,7 @@ describe("signInAction — falha fechado com mensagem genérica (AC 2)", () => {
       expect.objectContaining({
         email: "admin@example.com",
         password: "senha-ok",
-        redirectTo: "/carousels",
+        redirectTo: "/dashboard",
       }),
     );
   });

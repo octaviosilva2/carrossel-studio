@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
 import { validateImageFile } from "@/lib/image-upload";
 import { uploadImageToBlob } from "@/lib/blob-upload";
-import { updateClientSettings } from "@/lib/actions/settings";
+import { completeOnboarding } from "@/lib/actions/settings";
 import type { ClientSettings } from "@/lib/actions/settings-types";
 
 interface OnboardingFormProps {
@@ -20,9 +20,9 @@ interface OnboardingFormProps {
 /**
  * Form de onboarding (primeiro acesso): avatar, nome e @handle. SEM campo de
  * tema — o tema so e escolhido na hora de criar cada carrossel (regra fixada
- * no CLAUDE.md do produto). Usa a action REAL updateClientSettings, preservando
- * `verified`/`theme` atuais do dono (o form nao os expoe). "Deixar para depois"
- * e "Concluir" levam ao Dashboard; so "Concluir" persiste.
+ * no CLAUDE.md do produto). Usa completeOnboarding (marca onboardingCompletedAt),
+ * preservando `verified`/`theme` atuais do dono (o form nao os expoe). "Deixar
+ * para depois" e "Concluir" levam ao Dashboard; so "Concluir" persiste.
  */
 export function OnboardingForm({ initial }: OnboardingFormProps) {
   const router = useRouter();
@@ -79,7 +79,7 @@ export function OnboardingForm({ initial }: OnboardingFormProps) {
     setSaveError("");
     try {
       // Preserva verified/theme atuais (nao editaveis aqui) — so nome/handle/avatar.
-      await updateClientSettings({
+      await completeOnboarding({
         name,
         handle,
         avatarUrl,

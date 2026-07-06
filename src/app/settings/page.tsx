@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/app-shell/app-shell";
 import { requireUser } from "@/lib/auth-guard";
 import { getClientSettings } from "@/lib/actions/settings";
-import { getOnboardingCompletedAtMock, isAdminUser } from "@/lib/mock-redesign";
 import { SettingsForm } from "./settings-form";
 
 // Nao cachear: reflete a identidade padrao persistida mais recente do dono.
@@ -22,7 +21,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     getClientSettings(),
     searchParams,
   ]);
-  const isAdmin = isAdminUser(user.role);
+  const isAdmin = user.role === "admin";
 
   const initialTab = params.tab === "account" ? "account" : "identity";
 
@@ -41,7 +40,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           initial={settings}
           userEmail={user.email ?? ""}
           initialTab={initialTab}
-          onboardingCompletedAt={getOnboardingCompletedAtMock()}
+          onboardingCompletedAt={settings.onboardingCompletedAt}
         />
       </div>
     </AppShell>

@@ -2,13 +2,6 @@
 // ISO — usado pelo Dashboard (contadores + grafico de atividade) e pelo
 // Histórico (pills de filtro). Modulo PURO (sem "use client"): roda tanto em
 // componentes client quanto em calculos de teste, sem depender do DOM.
-//
-// TODO(integração pós-merge): listCarousels() hoje so expoe `updatedAt`
-// (CarouselListItem, src/lib/actions/carousel-types.ts) — o schema real ja tem
-// `createdAt` em `carousels` (src/db/schema.ts), so falta a action/type
-// exporem. Ate la, todo calculo aqui usa `updatedAt` como stand-in de
-// "quando foi gerado", o que e impreciso para carrosseis editados depois de
-// criados. Trocar por `createdAt` assim que a action expuser o campo.
 
 export type Period = "today" | "week" | "month" | "all";
 

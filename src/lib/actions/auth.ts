@@ -117,7 +117,7 @@ export async function signInAction(
     await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
-      redirectTo: "/carousels",
+      redirectTo: "/dashboard",
     });
     // Inatingivel em sucesso (signIn redireciona). Mantido por exaustividade.
     return { error: "" };

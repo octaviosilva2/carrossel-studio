@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -28,80 +29,67 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  createClientMock,
-  USAGE_PLACEHOLDER,
-  type AdminClientRow,
-} from "@/lib/mock-redesign";
+import { createClientAccount, deleteClientAccount } from "@/lib/actions/admin";
+import type { AdminClientListItem } from "@/lib/actions/admin-types";
+import { USAGE_PLACEHOLDER } from "@/lib/mock-redesign";
 
 interface AdminClientProps {
-  initialClients: AdminClientRow[];
+  initialClients: AdminClientListItem[];
 }
 
 /**
- * Tela de administração de clientes (redesign). TUDO aqui é MOCK client-side —
- * não existe ainda, no backend, o conceito de "admin gerencia múltiplos
- * clientes" (schema atual é 1 `users` por login, sem papel nem multi-tenant).
- * TODO(integração pós-merge): trocar por listagem/criação/gestão reais quando
- * o backend expuser essas actions (ver src/lib/mock-redesign.ts).
+ * Tela de administração de clientes. Criar/listar/excluir usam as actions reais
+ * (src/lib/actions/admin.ts). Sem "suspender" (não existe status no schema) e
+ * sem uso/custo real (placeholder — não há tabela de tracking de tokens ainda).
  */
 export function AdminClient({ initialClients }: AdminClientProps) {
-  const [clients, setClients] = useState(initialClients);
-  const [managing, setManaging] = useState<AdminClientRow | null>(null);
+  const router = useRouter();
+  const [managing, setManaging] = useState<AdminClientListItem | null>(null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     setIsCreating(true);
     setCreateError("");
     try {
-      await createClientMock(email, password);
-      // Mock: so acrescenta localmente — nao persiste (sem backend ainda).
-      setClients((prev) => [
-        ...prev,
-        {
-          id: `mock-${prev.length + 1}`,
-          name: email.split("@")[0] ?? "Novo cliente",
-          handle: (email.split("@")[0] ?? "novocliente").toLowerCase(),
-          email,
-          carouselsCount: 0,
-          status: "ativo",
-        },
-      ]);
+      await createClientAccount({ email, password });
       setEmail("");
       setPassword("");
-    } catch {
-      setCreateError("Não foi possível criar o cliente. Tente novamente.");
+      router.refresh();
+    } catch (err) {
+      setCreateError(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível criar o cliente. Tente novamente.",
+      );
     } finally {
       setIsCreating(false);
     }
   }
 
-  function toggleStatus(id: string) {
-    setClients((prev) =>
-      prev.map((client) =>
-        client.id === id
-          ? {
-              ...client,
-              status: client.status === "ativo" ? "suspenso" : "ativo",
-            }
-          : client,
-      ),
-    );
-    setManaging((prev) =>
-      prev && prev.id === id
-        ? { ...prev, status: prev.status === "ativo" ? "suspenso" : "ativo" }
-        : prev,
-    );
-  }
-
-  function removeClient(id: string) {
-    setClients((prev) => prev.filter((client) => client.id !== id));
-    setManaging(null);
+  async function handleDelete(id: string) {
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteClientAccount(id);
+      setManaging(null);
+      router.refresh();
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível excluir o cliente. Tente novamente.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   return (
@@ -134,9 +122,10 @@ export function AdminClient({ initialClients }: AdminClientProps) {
                   id="admin-new-password"
                   type="text"
                   required
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="gerar automática"
+                  placeholder="mín. 8 caracteres"
                 />
               </div>
             </div>
@@ -163,50 +152,54 @@ export function AdminClient({ initialClients }: AdminClientProps) {
               <TableHead>Cliente</TableHead>
               <TableHead>E-mail</TableHead>
               <TableHead>Carrosséis</TableHead>
-              <TableHead>Status</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {clients.map((client) => (
-              <TableRow key={client.id}>
-                <TableCell>
-                  {client.name}{" "}
-                  <span className="text-muted-foreground">@{client.handle}</span>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {client.email}
-                </TableCell>
-                <TableCell>{client.carouselsCount}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={
-                      client.status === "ativo"
-                        ? "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
-                        : "border-transparent bg-muted text-muted-foreground"
-                    }
-                  >
-                    {client.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setManaging(client)}
-                  >
-                    Gerenciar
-                  </Button>
+            {initialClients.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  Nenhum cliente ainda.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              initialClients.map((client) => (
+                <TableRow key={client.id}>
+                  <TableCell>
+                    {client.name || (
+                      <span className="text-muted-foreground italic">
+                        (onboarding pendente)
+                      </span>
+                    )}{" "}
+                    {client.handle ? (
+                      <span className="text-muted-foreground">@{client.handle}</span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {client.email}
+                  </TableCell>
+                  <TableCell>{client.carouselCount}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setManaging(client)}
+                    >
+                      Gerenciar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>
 
-      <Dialog open={managing !== null} onOpenChange={(open) => !open && setManaging(null)}>
+      <Dialog
+        open={managing !== null}
+        onOpenChange={(open) => !open && setManaging(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Gerenciar cliente</DialogTitle>
@@ -216,10 +209,12 @@ export function AdminClient({ initialClients }: AdminClientProps) {
             <>
               <div className="flex items-center gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                  {managing.name.charAt(0).toUpperCase()}
+                  {(managing.name || managing.email).charAt(0).toUpperCase()}
                 </span>
                 <div>
-                  <p className="text-sm font-medium">{managing.name}</p>
+                  <p className="text-sm font-medium">
+                    {managing.name || managing.email}
+                  </p>
                   <p className="text-xs text-muted-foreground">{managing.email}</p>
                 </div>
               </div>
@@ -235,26 +230,23 @@ export function AdminClient({ initialClients }: AdminClientProps) {
                 </div>
               </div>
 
+              {deleteError ? (
+                <p className="text-sm text-destructive">{deleteError}</p>
+              ) : null}
+
               <DialogFooter className="sm:justify-start">
                 <Button type="button" variant="outline" size="sm" disabled>
                   Redefinir senha
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => toggleStatus(managing.id)}
-                >
-                  {managing.status === "ativo" ? "Suspender" : "Reativar"}
-                </Button>
-                <Button
-                  type="button"
                   variant="destructive"
                   size="sm"
                   className="sm:ml-auto"
-                  onClick={() => removeClient(managing.id)}
+                  disabled={isDeleting}
+                  onClick={() => handleDelete(managing.id)}
                 >
-                  Excluir cliente
+                  {isDeleting ? "Excluindo…" : "Excluir cliente"}
                 </Button>
               </DialogFooter>
             </>

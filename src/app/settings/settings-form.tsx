@@ -18,9 +18,8 @@ import { ImageCropDialog } from "@/components/image-crop-dialog";
 import { DEFAULT_AVATAR_DATA_URL } from "@/lib/editor-state";
 import { validateImageFile } from "@/lib/image-upload";
 import { uploadImageToBlob } from "@/lib/blob-upload";
-import { updateClientSettings } from "@/lib/actions/settings";
+import { changePassword, updateClientSettings } from "@/lib/actions/settings";
 import type { ClientSettings } from "@/lib/actions/settings-types";
-import { changePasswordMock } from "@/lib/mock-redesign";
 
 interface SettingsFormProps {
   initial: ClientSettings;
@@ -37,8 +36,7 @@ type PasswordState = "idle" | "saving" | "saved" | "error";
 /**
  * Form de Configurações com abas Identidade/Conta (redesign). Identidade
  * mantem a mesma logica de sempre (updateClientSettings real); Conta mostra o
- * e-mail (read-only) e troca de senha — MOCK ate o backend expor a action real
- * (ver src/lib/mock-redesign.ts).
+ * e-mail (read-only) e troca de senha (changePassword real).
  */
 export function SettingsForm({
   initial,
@@ -131,20 +129,22 @@ export function SettingsForm({
     }
   }
 
-  // Troca de senha — MOCK (ver src/lib/mock-redesign.ts). Substituir por action
-  // real assim que o backend expuser `changePassword`.
   async function handleChangePassword(e: FormEvent) {
     e.preventDefault();
     setPasswordState("saving");
     setPasswordError("");
     try {
-      await changePasswordMock(currentPassword, newPassword);
+      await changePassword({ currentPassword, newPassword });
       setPasswordState("saved");
       setCurrentPassword("");
       setNewPassword("");
-    } catch {
+    } catch (err) {
       setPasswordState("error");
-      setPasswordError("Não foi possível trocar a senha. Tente novamente.");
+      setPasswordError(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível trocar a senha. Tente novamente.",
+      );
     }
   }
 

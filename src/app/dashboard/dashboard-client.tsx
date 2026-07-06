@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { Images } from "lucide-react";
 
 import { countByPeriod, last7DaysActivity } from "@/lib/carousel-periods";
 import type { CarouselListItem } from "@/lib/actions/carousel-types";
@@ -16,17 +15,14 @@ const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
   month: "short",
 });
 
-// TODO(integração pós-merge): usar `createdAt` (o schema ja tem — falta a
-// action expor, ver src/lib/carousel-periods.ts) em vez de `updatedAt` como
-// "quando foi gerado". Ate la os contadores/grafico refletem edicoes tambem.
 function getDateIso(carousel: CarouselListItem): string {
-  return carousel.updatedAt;
+  return carousel.createdAt;
 }
 
 /**
  * Dashboard (Client): contadores, recentes e grafico de atividade calculados
  * a partir do array de listCarousels() — tudo em cima de dado REAL do dono,
- * so a granularidade de data e que e um stand-in (ver TODO acima).
+ * usando `createdAt` (quando o carrossel foi gerado).
  */
 export function DashboardClient({ carousels }: DashboardClientProps) {
   const counts = useMemo(() => countByPeriod(carousels, getDateIso), [carousels]);
@@ -67,13 +63,16 @@ export function DashboardClient({ carousels }: DashboardClientProps) {
               href={`/editor?id=${carousel.id}`}
               className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
-              <div className="flex aspect-[4/3] items-center justify-center border-b border-border bg-muted/40">
-                <Images className="h-6 w-6 text-muted-foreground/50" />
+              <div className="flex aspect-[4/3] items-center justify-center border-b border-border bg-muted/40 p-3">
+                <p className="line-clamp-3 text-center text-[11px] italic text-muted-foreground">
+                  {carousel.firstSlideBody || "…"}
+                </p>
               </div>
               <div className="p-3">
                 <p className="truncate text-xs font-medium">{carousel.title}</p>
                 <p className="text-[11px] text-muted-foreground">
-                  {dateFormatter.format(new Date(carousel.updatedAt))}
+                  {dateFormatter.format(new Date(carousel.createdAt))} ·{" "}
+                  {carousel.slideCount} slide{carousel.slideCount === 1 ? "" : "s"}
                 </p>
               </div>
             </Link>

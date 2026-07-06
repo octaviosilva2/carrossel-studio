@@ -2,7 +2,6 @@ import { AppShell } from "@/components/app-shell/app-shell";
 import { NewCarouselButton } from "@/components/app-shell/new-carousel-button";
 import { requireUser } from "@/lib/auth-guard";
 import { listCarousels } from "@/lib/actions/carousels";
-import { isAdminUser } from "@/lib/mock-redesign";
 import { DashboardClient } from "./dashboard-client";
 
 // Nao cachear: contadores/recentes/atividade refletem o estado persistido mais recente.
@@ -16,7 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const user = await requireUser();
   const carousels = await listCarousels();
-  const isAdmin = isAdminUser(user.role);
+  const isAdmin = user.role === "admin";
 
   return (
     <AppShell

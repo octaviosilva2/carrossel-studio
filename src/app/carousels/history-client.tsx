@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Images, Search, Trash2 } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -56,9 +56,7 @@ export function HistoryClient({ carousels }: HistoryClientProps) {
       const matchesQuery =
         normalizedQuery === "" ||
         carousel.title.toLowerCase().includes(normalizedQuery);
-      // TODO(integração pós-merge): usar createdAt quando listCarousels() expuser
-      // o campo (ver src/lib/carousel-periods.ts) — hoje usa updatedAt.
-      const matchesTime = matchesPeriod(carousel.updatedAt, period, now);
+      const matchesTime = matchesPeriod(carousel.createdAt, period, now);
       return matchesQuery && matchesTime;
     });
   }, [carousels, query, period]);
@@ -110,13 +108,16 @@ export function HistoryClient({ carousels }: HistoryClientProps) {
               key={carousel.id}
               className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md"
             >
-              <div className="flex aspect-[4/3] items-center justify-center border-b border-border bg-muted/40">
-                <Images className="h-5 w-5 text-muted-foreground/50" />
+              <div className="flex aspect-[4/3] items-center justify-center border-b border-border bg-muted/40 p-2">
+                <p className="line-clamp-3 text-center text-[10px] italic text-muted-foreground">
+                  {carousel.firstSlideBody || "…"}
+                </p>
               </div>
               <div className="p-2.5">
                 <p className="truncate text-xs font-medium">{carousel.title}</p>
                 <p className="mb-2 text-[11px] text-muted-foreground">
-                  {dateFormatter.format(new Date(carousel.updatedAt))}
+                  {dateFormatter.format(new Date(carousel.createdAt))} ·{" "}
+                  {carousel.slideCount} slide{carousel.slideCount === 1 ? "" : "s"}
                 </p>
                 <div className="flex items-center gap-1">
                   <Link

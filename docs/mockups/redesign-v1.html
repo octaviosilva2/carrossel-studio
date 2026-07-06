@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carrossel Studio — Redesign v1 (mockup)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca' }
+          },
+          borderRadius: { xl2:'14px' },
+          boxShadow: {
+            card:'0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06)',
+            pop:'0 10px 30px rgba(16,24,40,.14)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    .slide-font { font-family:'Segoe UI',Tahoma,sans-serif; }
+
+    /* Transição suave ao alternar tema (app e preview) — fade de cores ~250ms */
+    body, aside, header, main, .view,
+    [class*="bg-white"], [class*="bg-slate"], [class*="bg-zinc"], [class*="bg-brand"],
+    .field, .btn, .card-hover, table, tr, td, th {
+      transition: background-color .25s ease, border-color .25s ease, color .25s ease;
+    }
+    /* canvas do carrossel também faz fade ao trocar de tema */
+    #slide-canvas, #slide-canvas #slide-name, #slide-canvas #slide-handle, #slide-canvas #slide-body {
+      transition: background-color .25s ease, color .25s ease;
+    }
+    /* tooltip do gráfico de atividade */
+    .bar { position:relative; transition:opacity .15s, filter .15s; }
+    .bar:hover { filter:brightness(1.15); }
+    .bar-tip { position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%) translateY(4px);
+      background:#0f172a; color:#fff; font-size:10px; padding:2px 6px; border-radius:6px; white-space:nowrap;
+      opacity:0; pointer-events:none; transition:opacity .18s ease, transform .18s ease; }
+    .dark .bar-tip { background:#e4e4e7; color:#18181b; }
+    .bar:hover .bar-tip { opacity:1; transform:translateX(-50%) translateY(0); }
+    ::-webkit-scrollbar { width:8px; height:8px; }
+    ::-webkit-scrollbar-thumb { background:rgba(120,120,130,.30); border-radius:8px; }
+    .page { display:none; } .page.active { display:block; }
+
+    /* ---------- SISTEMA DE BOTÕES ---------- */
+    .btn { display:inline-flex; align-items:center; gap:.4rem; font-size:.8125rem; font-weight:500;
+           border-radius:8px; padding:.5rem .85rem; line-height:1; cursor:pointer; white-space:nowrap;
+           transition:background .15s, box-shadow .15s, transform .12s, border-color .15s, color .15s; }
+    .btn-sm { font-size:.75rem; padding:.375rem .625rem; }
+    .btn svg { width:15px; height:15px; }
+    .btn:active { transform:translateY(1px); }
+    .btn-primary { background:#4f46e5; color:#fff; box-shadow:0 1px 2px rgba(79,70,229,.4); }
+    .btn-primary:hover { background:#4338ca; box-shadow:0 4px 12px rgba(79,70,229,.35); }
+    .btn-secondary { background:#fff; color:#334155; border:1px solid #e2e8f0; }
+    .btn-secondary:hover { background:#f8fafc; border-color:#cbd5e1; box-shadow:0 2px 6px rgba(16,24,40,.06); }
+    .dark .btn-secondary { background:#27272a; color:#e4e4e7; border-color:#3f3f46; }
+    .dark .btn-secondary:hover { background:#323238; border-color:#52525b; }
+    .btn-danger { background:#fff; color:#dc2626; border:1px solid #fecaca; }
+    .btn-danger:hover { background:#fef2f2; border-color:#fca5a5; box-shadow:0 2px 6px rgba(220,38,38,.12); }
+    .dark .btn-danger { background:#27272a; color:#f87171; border-color:#7f1d1d; }
+    .dark .btn-danger:hover { background:#450a0a; border-color:#b91c1c; }
+    .btn-ghost { background:transparent; color:#64748b; padding:.375rem .5rem; }
+    .btn-ghost:hover { background:#f1f5f9; color:#334155; }
+    .dark .btn-ghost { color:#a1a1aa; }
+    .dark .btn-ghost:hover { background:#27272a; color:#e4e4e7; }
+    .btn-ghost.danger { color:#ef4444; }
+    .btn-ghost.danger:hover { background:#fef2f2; }
+    .dark .btn-ghost.danger:hover { background:#450a0a; }
+
+    /* sidebar colapsável (modo só ícones) */
+    #app-sidebar, #main-content { transition: width .2s ease, margin-left .2s ease; }
+    .sidebar-collapsed .sidebar-label { display:none !important; }
+    .sidebar-collapsed .nav-item { justify-content:center; }
+    .sidebar-collapsed #sidebar-header-row { padding-left:0; padding-right:0; justify-content:center; }
+    #sidebar-toggle-icon { transition: transform .2s ease; }
+    .sidebar-collapsed #sidebar-toggle-icon { transform: rotate(180deg); }
+
+    /* card com hover elegante */
+    .card-hover { transition:box-shadow .18s, transform .18s, border-color .18s; }
+    .card-hover:hover { box-shadow:0 10px 30px rgba(16,24,40,.14); transform:translateY(-2px); border-color:#c7d2fe; }
+    .dark .card-hover:hover { border-color:#4338ca; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+
+    .field { width:100%; border-radius:8px; border:1px solid #e2e8f0; background:#fff;
+             padding:.5rem .7rem; font-size:.8125rem; color:#0f172a; transition:box-shadow .15s, border-color .15s; }
+    .field:focus { outline:none; box-shadow:0 0 0 2px rgba(99,102,241,.35); border-color:#818cf8; }
+    .dark .field { background:#18181b; border-color:#3f3f46; color:#f4f4f5; }
+
+    /* toggle switch reutilizável */
+    .switch { position:relative; width:34px; height:20px; border-radius:999px; background:#cbd5e1; transition:background .2s; cursor:pointer; flex-shrink:0; }
+    .switch.on { background:#4f46e5; }
+    .switch::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:999px; background:#fff; transition:transform .2s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+    .switch.on::after { transform:translateX(14px); }
+    .dark .switch { background:#52525b; }
+
+    /* modal */
+    .modal-backdrop { position:fixed; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(2px); display:none; align-items:center; justify-content:center; z-index:50; padding:1rem; }
+    .modal-backdrop.open { display:flex; }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-zinc-950 text-slate-700 dark:text-zinc-200 antialiased text-[13px]">
+
+<!-- Marca reutilizável (SVG inline: cards sobrepostos + dots) -->
+<template id="logo-tpl">
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-brand-600 w-full h-full">
+    <rect x="6.5" y="4" width="11" height="14" rx="2.5" fill="currentColor" opacity="0.28"/>
+    <rect x="4" y="6" width="11" height="14" rx="2.5" fill="currentColor"/>
+    <circle cx="9.5" cy="21.5" r="0.9" fill="currentColor"/>
+    <circle cx="13" cy="21.5" r="0.9" fill="currentColor" opacity="0.5"/>
+    <circle cx="16.5" cy="21.5" r="0.9" fill="currentColor" opacity="0.5"/>
+  </svg>
+</template>
+
+<!-- ============================================================= -->
+<!-- LOGIN -->
+<!-- ============================================================= -->
+<section id="page-login" class="page active">
+  <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-sm">
+      <div class="flex items-center gap-2.5 justify-center mb-7">
+        <span class="w-8 h-8 inline-block js-logo"></span>
+        <span class="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Carrossel Studio</span>
+      </div>
+      <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl2 p-7 shadow-card">
+        <h1 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Entrar</h1>
+        <p class="text-slate-500 dark:text-zinc-400 mb-5">Acesse sua conta para gerar carrosséis.</p>
+        <form onsubmit="event.preventDefault(); go('onboarding')" class="space-y-3.5">
+          <div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300" for="login-email">E-mail</label><input id="login-email" type="email" value="cliente@empresa.com" class="field" /></div>
+          <div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300" for="login-pass">Senha</label><input id="login-pass" type="password" value="••••••••" class="field" /></div>
+          <button type="submit" class="btn btn-primary w-full justify-center py-2.5">Entrar</button>
+        </form>
+        <p class="text-xs text-slate-400 dark:text-zinc-500 mt-5 text-center">Sem cadastro público — contas são criadas pelo administrador.</p>
+      </div>
+      <p class="text-center text-xs text-slate-400 mt-4">Mockup · <button onclick="go('dashboard')" class="underline hover:text-brand-500">pular para o app</button></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- ONBOARDING -->
+<!-- ============================================================= -->
+<section id="page-onboarding" class="page">
+  <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl2 p-7 shadow-card">
+      <div class="flex items-center justify-between mb-5">
+        <h1 class="text-lg font-semibold text-slate-900 dark:text-white">Configure sua identidade</h1>
+        <button onclick="go('dashboard')" class="btn btn-ghost btn-sm">Deixar para depois</button>
+      </div>
+      <p class="text-xs text-slate-400 mb-6">Defina como sua identidade aparece nos carrosséis.</p>
+      <div class="space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-14 h-14 rounded-full bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-slate-400 text-xs">avatar</div>
+          <button onclick="openCrop('circle')" class="btn btn-secondary btn-sm">Enviar imagem</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300">Nome</label><input value="Octavio" class="field" /></div>
+          <div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300">@handle</label><input value="@octavio" class="field" /></div>
+        </div>
+        <p class="text-xs text-slate-400">O tema claro/escuro é escolhido na hora de criar cada carrossel.</p>
+      </div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button onclick="go('dashboard')" class="btn btn-secondary">Deixar para depois</button>
+        <button onclick="go('dashboard')" class="btn btn-primary">Concluir</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- SHELL DO APP -->
+<!-- ============================================================= -->
+<section id="app-shell" class="page">
+  <div class="min-h-screen lg:flex">
+    <!-- backdrop do drawer mobile -->
+    <div id="sidebar-backdrop" onclick="closeMobileSidebar()" class="hidden fixed inset-0 bg-slate-900/50 z-30 lg:hidden"></div>
+
+    <!-- SIDEBAR: off-canvas no mobile/tablet (<lg), fixa e colapsável no desktop/laptop (>=lg) -->
+    <aside id="app-sidebar" class="w-64 lg:w-56 shrink-0 border-r border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col fixed h-screen z-40 -translate-x-full lg:translate-x-0 transition-transform lg:transition-[width] duration-200">
+      <div id="sidebar-header-row" class="flex items-center gap-2 px-4 h-14 border-b border-slate-200 dark:border-zinc-800">
+        <span class="w-7 h-7 inline-block js-logo shrink-0"></span>
+        <span class="sidebar-label font-semibold text-sm tracking-tight text-slate-900 dark:text-white truncate">Carrossel Studio</span>
+        <button onclick="toggleSidebar()" title="Recolher menu" class="hidden lg:flex ml-auto w-7 h-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:text-brand-600 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
+          <svg id="sidebar-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <button onclick="closeMobileSidebar()" title="Fechar menu" class="lg:hidden ml-auto w-7 h-7 shrink-0 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <nav class="flex-1 p-2.5 space-y-0.5 text-sm">
+        <button data-nav="dashboard" onclick="go('dashboard')" class="nav-item w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg> <span class="sidebar-label">Dashboard</span>
+        </button>
+        <button data-nav="create" onclick="openNewCarousel()" class="nav-item w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0"><circle cx="12" cy="12" r="9"/><path d="M12 8.5v7M8.5 12h7"/></svg> <span class="sidebar-label">Novo carrossel</span>
+        </button>
+        <button data-nav="history" onclick="go('history')" class="nav-item w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg> <span class="sidebar-label">Histórico</span>
+        </button>
+        <button data-nav="settings" onclick="go('settings')" class="nav-item w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> <span class="sidebar-label">Configurações</span>
+        </button>
+        <div class="pt-2.5 mt-2.5 border-t border-slate-200 dark:border-zinc-800">
+          <p class="sidebar-label px-2.5 pb-1 text-[10px] uppercase tracking-wide text-slate-400 font-medium">Administração</p>
+          <button data-nav="admin" onclick="go('admin')" class="nav-item w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9.5 12l1.8 1.8 3.2-3.6"/></svg> <span class="sidebar-label">Admin</span>
+            <span class="sidebar-label ml-auto text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 font-medium">CEO</span>
+          </button>
+        </div>
+      </nav>
+      <div class="p-2.5 border-t border-slate-200 dark:border-zinc-800 space-y-2">
+        <button onclick="go('settings','account')" title="Ver conta" class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-left transition-colors">
+          <div class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-600 flex items-center justify-center text-brand-700 dark:text-white text-sm font-semibold shrink-0">O</div>
+          <div class="sidebar-label min-w-0 flex-1"><p class="text-sm font-medium truncate text-slate-800 dark:text-zinc-100">Octavio</p><p class="text-xs text-slate-400 truncate">cliente@empresa.com</p></div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="sidebar-label w-4 h-4 text-slate-400 shrink-0"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button onclick="toggleAppTheme()" class="sidebar-label w-full flex items-center justify-between rounded-lg border border-slate-200 dark:border-zinc-700 px-2.5 py-1.5 text-xs text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
+          <span>Tema do app</span>
+          <span id="app-theme-label" class="font-medium flex items-center gap-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="w-3.5 h-3.5"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></svg> Claro</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- CONTEÚDO -->
+    <main id="main-content" class="flex-1 lg:ml-56">
+
+      <!-- topbar mobile/tablet: hambúrguer + logo (some em telas >=lg) -->
+      <div class="lg:hidden flex items-center gap-3 h-14 px-4 border-b border-slate-200 dark:border-zinc-800 bg-slate-50/90 dark:bg-zinc-950/90 backdrop-blur sticky top-0 z-20">
+        <button onclick="openMobileSidebar()" class="p-1.5 -ml-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-5 h-5"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <span class="w-6 h-6 inline-block js-logo shrink-0"></span>
+        <span class="font-semibold text-sm text-slate-900 dark:text-white">Carrossel Studio</span>
+      </div>
+
+      <!-- ---------- DASHBOARD ---------- -->
+      <div id="view-dashboard" class="view">
+        <header class="h-14 border-b border-slate-200 dark:border-zinc-800 sticky top-14 lg:top-0 bg-slate-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
+          <div class="max-w-5xl h-full flex items-center justify-between px-5">
+            <h1 class="text-sm font-semibold text-slate-900 dark:text-white">Dashboard</h1>
+            <button onclick="openNewCarousel()" class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Novo carrossel</button>
+          </div>
+        </header>
+        <div class="p-5 max-w-5xl">
+          <!-- 4 contadores do mesmo tamanho -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+            <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-card"><p class="text-xs text-slate-500 dark:text-zinc-400">Total gerados</p><p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">128</p></div>
+            <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-card"><p class="text-xs text-slate-500 dark:text-zinc-400">Este mês</p><p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">14</p></div>
+            <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-card"><p class="text-xs text-slate-500 dark:text-zinc-400">Esta semana</p><p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">6</p></div>
+            <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-card"><p class="text-xs text-slate-500 dark:text-zinc-400">Hoje</p><p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">3</p></div>
+          </div>
+
+          <!-- Recentes: 4 cards numa fileira única -->
+          <div class="flex items-center justify-between mb-2.5">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Recentes</h2>
+            <button onclick="go('history')" class="btn btn-ghost btn-sm">Ver histórico</button>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+            <button onclick="openCarousel('Produtividade real')" class="card-hover text-left rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card">
+              <div class="aspect-[4/3] bg-white flex items-center justify-center text-[11px] text-[#536471] slide-font p-3 border-b border-slate-100">"5 hábitos de produtividade…"</div>
+              <div class="p-3"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Produtividade real</p><p class="text-[11px] text-slate-400">03 jul · 5 slides</p></div>
+            </button>
+            <button onclick="openCarousel('Vendas B2B')" class="card-hover text-left rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card">
+              <div class="aspect-[4/3] bg-black flex items-center justify-center text-[11px] text-white slide-font p-3 border-b border-zinc-800">"Como fechar clientes…"</div>
+              <div class="p-3"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Vendas B2B</p><p class="text-[11px] text-slate-400">02 jul · 7 slides</p></div>
+            </button>
+            <button onclick="openCarousel('Erros com IA')" class="card-hover text-left rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card">
+              <div class="aspect-[4/3] bg-white flex items-center justify-center text-[11px] text-[#536471] slide-font p-3 border-b border-slate-100">"3 erros de IA que…"</div>
+              <div class="p-3"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Erros com IA</p><p class="text-[11px] text-slate-400">01 jul · 4 slides</p></div>
+            </button>
+            <button onclick="openCarousel('Funil simples')" class="card-hover text-left rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card">
+              <div class="aspect-[4/3] bg-white flex items-center justify-center text-[11px] text-[#536471] slide-font p-3 border-b border-slate-100">"O funil que uso…"</div>
+              <div class="p-3"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Funil simples</p><p class="text-[11px] text-slate-400">28 jun · 6 slides</p></div>
+            </button>
+          </div>
+
+          <!-- Atividade: largura total, altura maior, barras com tooltip no hover -->
+          <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-card">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Atividade (7 dias)</h3>
+              <span class="text-xs text-slate-400">Carrosséis gerados por dia</span>
+            </div>
+            <div id="activity-chart" class="flex items-end gap-3 h-56"></div>
+            <div id="activity-labels" class="flex justify-between text-[11px] text-slate-400 mt-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- CRIAÇÃO / EDIÇÃO ---------- -->
+      <div id="view-create" class="view hidden">
+        <header class="h-14 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between px-5 sticky top-14 lg:top-0 bg-slate-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
+          <div class="flex items-center gap-3">
+            <!-- título editável -->
+            <button onclick="renameCarousel()" class="group flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-white hover:text-brand-600">
+              <span id="carousel-title">Produtividade real</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-600"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+            </button>
+            <span id="autosave" class="text-xs text-slate-400 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Salvo agora</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-danger btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> Excluir</button>
+          </div>
+        </header>
+
+        <div class="flex flex-col lg:flex-row lg:h-[calc(100vh-3.5rem)]">
+          <!-- ESQUERDA: Assistente de IA — sempre aberto, sem opção de fechar -->
+          <div id="chat-panel" class="w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col order-3 lg:order-1">
+            <div class="px-3.5 py-2.5 border-b border-slate-200 dark:border-zinc-800">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">Assistente</p><p class="text-xs text-slate-400">Peça o que quiser.</p>
+            </div>
+            <div class="lg:flex-1 overflow-y-auto p-3.5 space-y-3 text-[13px] max-h-64 lg:max-h-none">
+              <div class="flex justify-end"><div class="bg-brand-600 text-white rounded-2xl rounded-br-sm px-3 py-1.5 max-w-[85%]">Cria um carrossel sobre produtividade com 5 slides</div></div>
+              <div class="flex justify-start"><div class="bg-slate-100 dark:bg-zinc-800 rounded-2xl rounded-bl-sm px-3 py-1.5 max-w-[85%]">Pronto! Gerei 5 slides. Veja o preview →</div></div>
+            </div>
+            <div class="p-2.5 border-t border-slate-200 dark:border-zinc-800"><div class="flex items-end gap-2"><textarea rows="1" placeholder="Peça uma alteração…" class="field resize-none flex-1"></textarea><button class="btn btn-primary" style="padding:.55rem .7rem;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></div></div>
+          </div>
+
+          <!-- CENTRO: editor manual + botão adicionar slide AQUI -->
+          <div class="flex-1 overflow-y-auto p-4 order-1 lg:order-2">
+            <div class="flex items-center justify-between mb-3">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">Slides <span class="text-slate-400 font-normal">(5)</span></p>
+              <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Adicionar slide</button>
+            </div>
+            <div class="space-y-2.5">
+              <div class="rounded-xl2 border-2 border-brand-500 bg-white dark:bg-zinc-900 p-2.5" onclick="selectSlide(1)">
+                <div class="flex items-center gap-2 mb-1.5"><span class="cursor-grab text-slate-400" title="Arrastar">⠿</span><span class="w-5 h-5 rounded-full bg-brand-600 text-white text-[11px] flex items-center justify-center">1</span><span class="text-xs text-brand-600 font-medium">Selecionado</span><button class="btn btn-ghost danger btn-sm ml-auto">Remover</button></div>
+                <textarea rows="3" class="field resize-none bg-slate-50 dark:bg-zinc-950">Produtividade não é fazer mais.
+
+É fazer o que importa, sem ruído.</textarea>
+                <button onclick="event.stopPropagation(); openCrop('rect')" class="btn btn-ghost btn-sm mt-1.5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> Anexar imagem</button>
+              </div>
+              <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5" onclick="selectSlide(2)"><div class="flex items-center gap-2 mb-1.5"><span class="cursor-grab text-slate-400">⠿</span><span class="w-5 h-5 rounded-full bg-slate-200 dark:bg-zinc-700 text-[11px] flex items-center justify-center">2</span><button class="btn btn-ghost danger btn-sm ml-auto">Remover</button></div><textarea rows="2" class="field resize-none bg-slate-50 dark:bg-zinc-950">Comece o dia com uma única tarefa que move o ponteiro.</textarea></div>
+              <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5" onclick="selectSlide(3)"><div class="flex items-center gap-2 mb-1.5"><span class="cursor-grab text-slate-400">⠿</span><span class="w-5 h-5 rounded-full bg-slate-200 dark:bg-zinc-700 text-[11px] flex items-center justify-center">3</span><span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">com imagem</span><button class="btn btn-ghost danger btn-sm ml-auto">Remover</button></div><textarea rows="2" class="field resize-none bg-slate-50 dark:bg-zinc-950">Bloqueie 90 minutos sem notificações. É aí que o trabalho profundo acontece.</textarea><button onclick="event.stopPropagation(); openCrop('rect')" class="btn btn-ghost btn-sm mt-1.5 text-emerald-600">🖼 imagem-foco.png · trocar</button></div>
+              <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5" onclick="selectSlide(4)"><div class="flex items-center gap-2 mb-1.5"><span class="cursor-grab text-slate-400">⠿</span><span class="w-5 h-5 rounded-full bg-slate-200 dark:bg-zinc-700 text-[11px] flex items-center justify-center">4</span><button class="btn btn-ghost danger btn-sm ml-auto">Remover</button></div><textarea rows="2" class="field resize-none bg-slate-50 dark:bg-zinc-950">Revise à noite: o que funcionou, o que cortar amanhã.</textarea></div>
+              <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5" onclick="selectSlide(5)"><div class="flex items-center gap-2 mb-1.5"><span class="cursor-grab text-slate-400">⠿</span><span class="w-5 h-5 rounded-full bg-slate-200 dark:bg-zinc-700 text-[11px] flex items-center justify-center">5</span><button class="btn btn-ghost danger btn-sm ml-auto">Remover</button></div><textarea rows="2" class="field resize-none bg-slate-50 dark:bg-zinc-950">Salve este post e comece amanhã por UMA coisa só.</textarea></div>
+            </div>
+          </div>
+
+          <!-- DIREITA: preview MAIOR (ocupa toda a altura, inclui miniaturas + painel identidade) -->
+          <div class="w-full lg:w-[560px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-900/60 flex flex-col lg:overflow-y-auto order-2 lg:order-3">
+            <div class="px-4 py-2.5 border-b border-slate-200 dark:border-zinc-800 flex items-center lg:sticky lg:top-0 bg-slate-100/90 dark:bg-zinc-900/90 backdrop-blur">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">Preview <span class="text-slate-400 font-normal">· slide <span id="preview-num">1</span>/5</span></p>
+            </div>
+
+            <!-- canvas grande: responsivo (mantém proporção 1080×1350) -->
+            <div class="flex items-center justify-center p-5">
+              <div id="slide-canvas" class="slide-font shadow-pop rounded-lg overflow-hidden w-full max-w-[420px] aspect-[4/5]" style="background:#FFFFFF;">
+                <div class="h-full flex flex-col justify-center" style="padding:0 32px;">
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="rounded-full bg-slate-300" style="width:30px;height:30px;"></div>
+                    <div class="leading-tight">
+                      <div class="flex items-center gap-1"><span id="slide-name" style="font-weight:700;font-size:15px;color:#14171A;">Octavio</span><span id="slide-badge"><svg width="15" height="15" viewBox="0 0 24 24" fill="#1D9BF0"><circle cx="12" cy="12" r="12"/><path d="M9.5 16.2l-3.7-3.7 1.4-1.4 2.3 2.3 5-5 1.4 1.4z" fill="#fff"/></svg></span></div>
+                      <span id="slide-handle" style="font-size:12px;color:#536471;">@octavio</span>
+                    </div>
+                  </div>
+                  <p id="slide-body" style="font-size:17px;line-height:1.52;color:#14171A;white-space:pre-line;">Produtividade não é fazer mais.
+
+É fazer o que importa, sem ruído.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- miniaturas -->
+            <div class="px-4 pb-3">
+              <div class="flex gap-2 overflow-x-auto justify-center">
+                <button onclick="selectSlide(1)" class="thumb shrink-0 w-11 h-14 rounded border-2 border-brand-500 bg-white text-[9px] text-[#536471] slide-font flex items-center justify-center">1</button>
+                <button onclick="selectSlide(2)" class="thumb shrink-0 w-11 h-14 rounded border border-slate-300 dark:border-zinc-700 bg-white text-[9px] text-slate-400 flex items-center justify-center">2</button>
+                <button onclick="selectSlide(3)" class="thumb shrink-0 w-11 h-14 rounded border border-slate-300 dark:border-zinc-700 bg-white text-[9px] text-slate-400 flex items-center justify-center">3</button>
+                <button onclick="selectSlide(4)" class="thumb shrink-0 w-11 h-14 rounded border border-slate-300 dark:border-zinc-700 bg-white text-[9px] text-slate-400 flex items-center justify-center">4</button>
+                <button onclick="selectSlide(5)" class="thumb shrink-0 w-11 h-14 rounded border border-slate-300 dark:border-zinc-700 bg-white text-[9px] text-slate-400 flex items-center justify-center">5</button>
+              </div>
+            </div>
+
+            <!-- mini-painel de identidade aplicada -->
+            <div class="mx-4 mb-3 rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+              <div class="flex items-center gap-2.5 mb-3">
+                <button onclick="openCrop('circle')" class="w-9 h-9 rounded-full bg-slate-200 dark:bg-zinc-700 flex items-center justify-center text-[9px] text-slate-400 hover:ring-2 hover:ring-brand-400 transition" title="Trocar avatar">avatar</button>
+                <div class="min-w-0"><p class="text-sm font-medium text-slate-800 dark:text-zinc-100 truncate">Octavio</p><p class="text-xs text-slate-400 truncate">@octavio</p></div>
+              </div>
+              <div class="flex items-center justify-between py-1.5 border-t border-slate-100 dark:border-zinc-800">
+                <span class="text-xs text-slate-600 dark:text-zinc-300">Selo verificado</span>
+                <div id="sw-badge" class="switch on" onclick="toggleBadge()"></div>
+              </div>
+              <div class="flex items-center justify-between py-1.5 border-t border-slate-100 dark:border-zinc-800">
+                <span class="text-xs text-slate-600 dark:text-zinc-300">Tema do carrossel</span>
+                <div class="flex items-center gap-0.5 rounded-lg bg-slate-100 dark:bg-zinc-800 p-0.5 text-xs">
+                  <button id="mini-ct-light" onclick="setCarouselTheme('light')" class="px-2 py-0.5 rounded-md bg-white dark:bg-zinc-700 shadow-sm">Claro</button>
+                  <button id="mini-ct-dark" onclick="setCarouselTheme('dark')" class="px-2 py-0.5 rounded-md text-slate-500">Escuro</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- exportação: dois botões -->
+            <div class="mx-4 mb-4 flex gap-2">
+              <button class="btn btn-primary flex-1 justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg> Baixar todos (ZIP)</button>
+              <button class="btn btn-secondary flex-1 justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg> Este slide (PNG)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- HISTÓRICO ---------- -->
+      <div id="view-history" class="view hidden">
+        <header class="h-14 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between px-5 sticky top-14 lg:top-0 bg-slate-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
+          <h1 class="text-sm font-semibold text-slate-900 dark:text-white">Histórico</h1>
+          <button onclick="openNewCarousel()" class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Novo carrossel</button>
+        </header>
+        <div class="p-5 max-w-6xl">
+          <div class="flex flex-wrap items-center gap-2.5 mb-4">
+            <div class="relative flex-1 max-w-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input placeholder="Buscar por nome…" class="field pl-9" /></div>
+            <select class="field w-auto"><option>Todas as identidades</option><option>Octavio (@octavio)</option></select>
+          </div>
+          <!-- pills de filtro (aplicam sobre uma lista única, sem agrupar) -->
+          <div class="flex items-center gap-1 mb-5">
+            <button data-period="today" onclick="setPeriod('today')" class="period-pill px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800">Hoje</button>
+            <button data-period="week" onclick="setPeriod('week')" class="period-pill px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800">Esta semana</button>
+            <button data-period="month" onclick="setPeriod('month')" class="period-pill px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800">Este mês</button>
+            <button data-period="all" onclick="setPeriod('all')" class="period-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-600 text-white">Tudo</button>
+          </div>
+
+          <!-- lista/grid única e plana; cada card marca o período mais recente a que pertence -->
+          <div id="hist-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div class="hist-card card-hover rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card" data-period="today">
+              <div class="aspect-[4/3] bg-white flex items-center justify-center text-[9px] text-[#536471] slide-font p-2 border-b border-slate-100">"5 hábitos de produtividade…"</div>
+              <div class="p-2.5"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Produtividade real</p><p class="text-[11px] text-slate-400 mb-2">03 jul · 5 slides</p><div class="flex items-center gap-1"><button onclick="openCarousel('Produtividade real')" class="btn btn-secondary btn-sm">Abrir</button><button class="btn btn-ghost btn-sm" title="Duplicar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button><button class="btn btn-ghost danger btn-sm ml-auto" title="Excluir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button></div></div>
+            </div>
+            <div class="hist-card card-hover rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card" data-period="today">
+              <div class="aspect-[4/3] bg-black flex items-center justify-center text-[9px] text-white slide-font p-2 border-b border-zinc-800">"Como fechar clientes…"</div>
+              <div class="p-2.5"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Vendas B2B</p><p class="text-[11px] text-slate-400 mb-2">03 jul · 7 slides</p><div class="flex items-center gap-1"><button onclick="openCarousel('Vendas B2B')" class="btn btn-secondary btn-sm">Abrir</button><button class="btn btn-ghost btn-sm" title="Duplicar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button><button class="btn btn-ghost danger btn-sm ml-auto" title="Excluir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button></div></div>
+            </div>
+            <div class="hist-card card-hover rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card" data-period="week">
+              <div class="aspect-[4/3] bg-white flex items-center justify-center text-[9px] text-[#536471] slide-font p-2 border-b border-slate-100">"3 erros de IA que…"</div>
+              <div class="p-2.5"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Erros com IA</p><p class="text-[11px] text-slate-400 mb-2">01 jul · 4 slides</p><div class="flex items-center gap-1"><button onclick="openCarousel('Erros com IA')" class="btn btn-secondary btn-sm">Abrir</button><button class="btn btn-ghost btn-sm" title="Duplicar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button><button class="btn btn-ghost danger btn-sm ml-auto" title="Excluir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button></div></div>
+            </div>
+            <div class="hist-card card-hover rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card" data-period="week">
+              <div class="aspect-[4/3] bg-white flex items-center justify-center text-[9px] text-[#536471] slide-font p-2 border-b border-slate-100">"O funil que uso…"</div>
+              <div class="p-2.5"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Funil simples</p><p class="text-[11px] text-slate-400 mb-2">28 jun · 6 slides</p><div class="flex items-center gap-1"><button onclick="openCarousel('Funil simples')" class="btn btn-secondary btn-sm">Abrir</button><button class="btn btn-ghost btn-sm" title="Duplicar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button><button class="btn btn-ghost danger btn-sm ml-auto" title="Excluir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button></div></div>
+            </div>
+            <div class="hist-card card-hover rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card" data-period="month">
+              <div class="aspect-[4/3] bg-black flex items-center justify-center text-[9px] text-white slide-font p-2 border-b border-zinc-800">"Roteiro de lançamento…"</div>
+              <div class="p-2.5"><p class="text-xs font-medium truncate text-slate-800 dark:text-zinc-100">Lançamento</p><p class="text-[11px] text-slate-400 mb-2">18 jun · 8 slides</p><div class="flex items-center gap-1"><button onclick="openCarousel('Lançamento')" class="btn btn-secondary btn-sm">Abrir</button><button class="btn btn-ghost btn-sm" title="Duplicar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button><button class="btn btn-ghost danger btn-sm ml-auto" title="Excluir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- CONFIGURAÇÕES (só Conta, sem Uso) ---------- -->
+      <div id="view-settings" class="view hidden">
+        <header class="h-14 border-b border-slate-200 dark:border-zinc-800 flex items-center px-5 sticky top-14 lg:top-0 bg-slate-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
+          <h1 class="text-sm font-semibold text-slate-900 dark:text-white">Configurações</h1>
+        </header>
+        <div class="p-5 max-w-2xl">
+          <div class="flex items-center gap-1 mb-5 border-b border-slate-200 dark:border-zinc-800">
+            <button id="tab-identity" onclick="setSettingsTab('identity')" class="px-3 py-2 text-sm font-medium border-b-2 border-brand-600 text-brand-700 dark:text-brand-300 -mb-px">Identidade</button>
+            <button id="tab-account" onclick="setSettingsTab('account')" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-slate-500 -mb-px">Conta</button>
+          </div>
+
+          <div id="settings-identity" class="space-y-4">
+            <div class="rounded-xl2 border border-amber-300 bg-amber-50 dark:bg-amber-500/10 dark:border-amber-500/30 p-3.5 flex items-start gap-2.5">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4 text-amber-500 mt-0.5"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+              <div class="flex-1"><p class="text-sm font-medium text-amber-800 dark:text-amber-200">Complete seu perfil</p><p class="text-xs text-amber-700 dark:text-amber-300/80">Você pulou o onboarding. Defina avatar e handle.</p></div>
+              <button class="btn btn-ghost btn-sm">Dispensar</button>
+            </div>
+            <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-card">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-white mb-3">Identidade</h2>
+              <div class="space-y-3">
+                <div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-slate-400 text-xs">avatar</div><button onclick="openCrop('circle')" class="btn btn-secondary btn-sm">Trocar avatar</button></div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300">Nome</label><input value="Octavio" class="field" /></div><div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300">@handle</label><input value="@octavio" class="field" /></div></div>
+                <label class="flex items-center gap-2.5"><input type="checkbox" checked class="accent-brand-600 w-4 h-4" /> Exibir selo verificado (círculo azul com check)</label>
+              </div>
+              <div class="flex justify-end mt-4"><button class="btn btn-primary">Salvar alterações</button></div>
+            </div>
+          </div>
+
+          <div id="settings-account" class="space-y-4 hidden">
+            <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-card">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-white mb-3">Conta</h2>
+              <div class="space-y-3"><div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300">E-mail</label><input value="cliente@empresa.com" class="field" /></div><button class="btn btn-secondary btn-sm">Trocar senha</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- ADMIN ---------- -->
+      <div id="view-admin" class="view hidden">
+        <header class="h-14 border-b border-slate-200 dark:border-zinc-800 flex items-center gap-3 px-5 sticky top-14 lg:top-0 bg-slate-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
+          <h1 class="text-sm font-semibold text-slate-900 dark:text-white">Admin</h1>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 font-medium">somente CEO/admin</span>
+        </header>
+        <div class="p-5 max-w-4xl space-y-4">
+          <!-- formulário simplificado: só e-mail + senha -->
+          <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-card">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">Criar novo cliente</h2>
+            <p class="text-xs text-slate-400 mb-3">Nome, handle, avatar e tema o cliente define no primeiro login (onboarding).</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300">E-mail</label><input placeholder="novo@cliente.com" class="field" /></div>
+              <div><label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300">Senha provisória</label><input placeholder="gerar automática" class="field" /></div>
+            </div>
+            <div class="flex justify-end mt-4"><button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Criar cliente</button></div>
+          </div>
+
+          <div class="rounded-xl2 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-card">
+            <div class="px-4 py-3 border-b border-slate-200 dark:border-zinc-800"><h2 class="text-sm font-semibold text-slate-900 dark:text-white">Clientes</h2></div>
+            <table class="w-full text-sm">
+              <thead class="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800"><tr><th class="px-4 py-2 font-medium">Cliente</th><th class="px-4 py-2 font-medium">E-mail</th><th class="px-4 py-2 font-medium">Carrosséis</th><th class="px-4 py-2 font-medium">Status</th><th class="px-4 py-2"></th></tr></thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-zinc-800">
+                <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors"><td class="px-4 py-2.5 text-slate-800 dark:text-zinc-100">Octavio <span class="text-slate-400">@octavio</span></td><td class="px-4 py-2.5 text-slate-500">cliente@empresa.com</td><td class="px-4 py-2.5">128</td><td class="px-4 py-2.5"><span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">ativo</span></td><td class="px-4 py-2.5 text-right"><button onclick="openClient('Octavio','cliente@empresa.com','42.300','~US$ 1,80')" class="btn btn-secondary btn-sm">Gerenciar</button></td></tr>
+                <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors"><td class="px-4 py-2.5 text-slate-800 dark:text-zinc-100">Marina Costa <span class="text-slate-400">@marina</span></td><td class="px-4 py-2.5 text-slate-500">marina@studio.co</td><td class="px-4 py-2.5">42</td><td class="px-4 py-2.5"><span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">ativo</span></td><td class="px-4 py-2.5 text-right"><button onclick="openClient('Marina Costa','marina@studio.co','18.900','~US$ 0,76')" class="btn btn-secondary btn-sm">Gerenciar</button></td></tr>
+                <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors"><td class="px-4 py-2.5 text-slate-800 dark:text-zinc-100">Pedro Alves <span class="text-slate-400">@pedroalves</span></td><td class="px-4 py-2.5 text-slate-500">pedro@agencia.io</td><td class="px-4 py-2.5">7</td><td class="px-4 py-2.5"><span class="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 dark:bg-zinc-700 dark:text-zinc-300">suspenso</span></td><td class="px-4 py-2.5 text-right"><button onclick="openClient('Pedro Alves','pedro@agencia.io','3.100','~US$ 0,12')" class="btn btn-secondary btn-sm">Gerenciar</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- MODAL: NOVO CARROSSEL (pede título) -->
+<!-- ============================================================= -->
+<div id="modal-new" class="modal-backdrop">
+  <div class="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-xl2 shadow-pop border border-slate-200 dark:border-zinc-800 p-5">
+    <h2 class="text-base font-semibold text-slate-900 dark:text-white mb-1">Novo carrossel</h2>
+    <p class="text-xs text-slate-500 dark:text-zinc-400 mb-4">Dê um título para começar. Você pode renomear depois.</p>
+    <label class="block font-medium mb-1 text-slate-700 dark:text-zinc-300">Título</label>
+    <input id="new-title" class="field mb-4" placeholder="Ex.: 5 hábitos de produtividade" />
+    <div class="flex justify-end gap-2">
+      <button onclick="closeModal('modal-new')" class="btn btn-secondary">Cancelar</button>
+      <button onclick="confirmNewCarousel()" class="btn btn-primary">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- MODAL: CROP DE IMAGEM (avatar circular / slide retangular) -->
+<!-- ============================================================= -->
+<div id="modal-crop" class="modal-backdrop">
+  <div class="w-full max-w-md bg-white dark:bg-zinc-900 rounded-xl2 shadow-pop border border-slate-200 dark:border-zinc-800 p-5">
+    <h2 class="text-base font-semibold text-slate-900 dark:text-white mb-3">Ajustar imagem</h2>
+    <!-- área da imagem com máscara -->
+    <div class="relative w-full h-64 rounded-lg overflow-hidden bg-gradient-to-br from-slate-300 via-slate-400 to-slate-600 flex items-center justify-center">
+      <span class="text-white/70 text-xs">imagem carregada</span>
+      <!-- máscara de recorte (troca entre círculo e retângulo) -->
+      <div id="crop-mask" class="absolute inset-0 pointer-events-none" style="box-shadow:0 0 0 9999px rgba(0,0,0,.5);"></div>
+    </div>
+    <!-- slider de zoom fake -->
+    <div class="flex items-center gap-3 mt-4">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4 text-slate-400"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4M8 11h6"/></svg>
+      <input type="range" min="1" max="3" step="0.1" value="1.4" class="flex-1 accent-brand-600" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4 text-slate-400"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4M8 11h6M11 8v6"/></svg>
+    </div>
+    <p class="text-xs text-slate-400 mt-2">Arraste a imagem para reposicionar e use o zoom para enquadrar.</p>
+    <div class="flex justify-end gap-2 mt-4">
+      <button onclick="closeModal('modal-crop')" class="btn btn-secondary">Cancelar</button>
+      <button onclick="closeModal('modal-crop')" class="btn btn-primary">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- MODAL: GERENCIAR CLIENTE (Admin) — com bloco de uso -->
+<!-- ============================================================= -->
+<div id="modal-client" class="modal-backdrop">
+  <div class="w-full max-w-md bg-white dark:bg-zinc-900 rounded-xl2 shadow-pop border border-slate-200 dark:border-zinc-800 p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-semibold text-slate-900 dark:text-white">Gerenciar cliente</h2>
+      <button onclick="closeModal('modal-client')" class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-11 h-11 rounded-full bg-brand-100 dark:bg-brand-600 flex items-center justify-center text-brand-700 dark:text-white font-semibold" id="client-initial">O</div>
+      <div><p class="text-sm font-medium text-slate-900 dark:text-white" id="client-name">Octavio</p><p class="text-xs text-slate-400" id="client-email">cliente@empresa.com</p></div>
+    </div>
+    <!-- bloco de uso (movido do Configurações do cliente) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+      <div class="rounded-lg bg-slate-50 dark:bg-zinc-800/60 p-3.5"><p class="text-xs text-slate-500 dark:text-zinc-400">Tokens este mês</p><p class="text-xl font-bold text-slate-900 dark:text-white mt-1" id="client-tokens">42.300</p></div>
+      <div class="rounded-lg bg-slate-50 dark:bg-zinc-800/60 p-3.5"><p class="text-xs text-slate-500 dark:text-zinc-400">Custo estimado</p><p class="text-xl font-bold text-slate-900 dark:text-white mt-1" id="client-cost">~US$ 1,80</p></div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="btn btn-secondary btn-sm">Redefinir senha</button>
+      <button class="btn btn-secondary btn-sm">Suspender</button>
+      <button class="btn btn-danger btn-sm ml-auto">Excluir cliente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const logoSvg = document.getElementById('logo-tpl').innerHTML;
+  document.querySelectorAll('.js-logo').forEach(el => { el.innerHTML = logoSvg; });
+
+  const slides = {
+    1:{ body:"Produtividade não é fazer mais.\n\nÉ fazer o que importa, sem ruído." },
+    2:{ body:"Comece o dia com uma única tarefa que move o ponteiro." },
+    3:{ body:"Bloqueie 90 minutos sem notificações. É aí que o trabalho profundo acontece." },
+    4:{ body:"Revise à noite: o que funcionou, o que cortar amanhã." },
+    5:{ body:"Salve este post e comece amanhã por UMA coisa só." }
+  };
+  let carouselTheme = 'light';
+
+  // Navegação SPA-fake
+  function go(page, tab) {
+    closeMobileSidebar();
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    if (page === 'login') { document.getElementById('page-login').classList.add('active'); return; }
+    if (page === 'onboarding') { document.getElementById('page-onboarding').classList.add('active'); return; }
+    document.getElementById('app-shell').classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+    document.getElementById('view-' + page).classList.remove('hidden');
+    if (page === 'settings') setSettingsTab(tab === 'account' ? 'account' : 'identity');
+    document.querySelectorAll('.nav-item').forEach(b => {
+      const on = b.dataset.nav === page;
+      b.classList.toggle('bg-brand-50', on); b.classList.toggle('dark:bg-brand-600/20', on);
+      b.classList.toggle('text-brand-700', on); b.classList.toggle('dark:text-brand-300', on);
+      b.classList.toggle('font-medium', on);
+      b.classList.toggle('text-slate-600', !on); b.classList.toggle('dark:text-zinc-400', !on);
+    });
+    window.scrollTo(0, 0);
+  }
+
+  // Fluxo novo carrossel: abre modal de título antes da tela de 3 colunas
+  function openNewCarousel() { closeMobileSidebar(); document.getElementById('new-title').value = ''; openModal('modal-new'); }
+  function confirmNewCarousel() {
+    const t = document.getElementById('new-title').value.trim() || 'Sem título';
+    closeModal('modal-new');
+    openCarousel(t);
+  }
+  // Abre a tela de criação com um título; Assistente de IA é sempre visível (sem colapsar)
+  function openCarousel(title) {
+    document.getElementById('carousel-title').textContent = title;
+    go('create');
+  }
+  function renameCarousel() {
+    const el = document.getElementById('carousel-title');
+    const novo = prompt('Renomear carrossel:', el.textContent);
+    if (novo && novo.trim()) el.textContent = novo.trim();
+  }
+
+  // Sidebar principal colapsável (modo só ícones)
+  let sidebarCollapsed = false;
+  function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    const aside = document.getElementById('app-sidebar');
+    const main = document.getElementById('main-content');
+    aside.classList.toggle('lg:w-56', !sidebarCollapsed);
+    aside.classList.toggle('lg:w-16', sidebarCollapsed);
+    aside.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+    main.classList.toggle('lg:ml-56', !sidebarCollapsed);
+    main.classList.toggle('lg:ml-16', sidebarCollapsed);
+  }
+
+  // Sidebar em modo drawer (mobile/tablet, <lg)
+  function openMobileSidebar() {
+    document.getElementById('app-sidebar').classList.remove('-translate-x-full');
+    document.getElementById('app-sidebar').classList.add('translate-x-0');
+    document.getElementById('sidebar-backdrop').classList.remove('hidden');
+  }
+  function closeMobileSidebar() {
+    document.getElementById('app-sidebar').classList.add('-translate-x-full');
+    document.getElementById('app-sidebar').classList.remove('translate-x-0');
+    document.getElementById('sidebar-backdrop').classList.add('hidden');
+  }
+
+  // Selo verificado on/off no preview
+  let badgeOn = true;
+  function toggleBadge() {
+    badgeOn = !badgeOn;
+    document.getElementById('sw-badge').classList.toggle('on', badgeOn);
+    document.getElementById('slide-badge').style.display = badgeOn ? '' : 'none';
+  }
+
+  // Abas Configurações
+  function setSettingsTab(tab) {
+    const isAcc = tab === 'account';
+    document.getElementById('settings-identity').classList.toggle('hidden', isAcc);
+    document.getElementById('settings-account').classList.toggle('hidden', !isAcc);
+    const active = 'border-brand-600 text-brand-700 dark:text-brand-300', idle = 'border-transparent text-slate-500';
+    document.getElementById('tab-identity').className = 'px-3 py-2 text-sm font-medium border-b-2 -mb-px ' + (isAcc ? idle : active);
+    document.getElementById('tab-account').className = 'px-3 py-2 text-sm font-medium border-b-2 -mb-px ' + (isAcc ? active : idle);
+  }
+
+  // Tema do APP
+  function toggleAppTheme() {
+    const html = document.documentElement;
+    const dark = html.classList.toggle('dark'); html.classList.toggle('light', !dark);
+    const sun = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="w-3.5 h-3.5"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></svg> Claro';
+    const moon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="w-3.5 h-3.5"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg> Escuro';
+    document.getElementById('app-theme-label').innerHTML = dark ? moon : sun;
+  }
+
+  // Tema do CARROSSEL (só preview) — independente do app
+  function setCarouselTheme(theme) {
+    carouselTheme = theme;
+    const c = document.getElementById('slide-canvas'), n = document.getElementById('slide-name'),
+          h = document.getElementById('slide-handle'), b = document.getElementById('slide-body');
+    if (theme === 'dark') { c.style.background='#000'; n.style.color='#FFF'; b.style.color='#FFF'; h.style.color='#71767B'; }
+    else { c.style.background='#FFF'; n.style.color='#14171A'; b.style.color='#14171A'; h.style.color='#536471'; }
+    // toggle único (mini-painel de identidade abaixo do preview)
+    const mOn = 'px-2 py-0.5 rounded-md bg-white dark:bg-zinc-700 shadow-sm', mOff = 'px-2 py-0.5 rounded-md text-slate-500';
+    document.getElementById('mini-ct-light').className = theme==='light'?mOn:mOff;
+    document.getElementById('mini-ct-dark').className = theme==='dark'?mOn:mOff;
+  }
+
+  // Seleciona slide
+  function selectSlide(n) {
+    document.getElementById('slide-body').textContent = slides[n].body;
+    document.getElementById('preview-num').textContent = n;
+    document.querySelectorAll('.thumb').forEach((t, i) => {
+      const on = (i + 1) === n;
+      t.className = 'thumb shrink-0 w-11 h-14 rounded ' +
+        (on ? 'border-2 border-brand-500 bg-white text-[9px] text-[#536471] slide-font flex items-center justify-center'
+            : 'border border-slate-300 dark:border-zinc-700 bg-white text-[9px] text-slate-400 flex items-center justify-center');
+      t.textContent = i + 1;
+    });
+    const as = document.getElementById('autosave');
+    if (as) { as.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Salvando…';
+      setTimeout(() => { as.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Salvo agora'; }, 800); }
+  }
+
+  // Modais genéricos
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  // Crop: ajusta a máscara (círculo para avatar, retângulo para slide)
+  function openCrop(shape) {
+    const mask = document.getElementById('crop-mask');
+    if (shape === 'circle') {
+      mask.style.borderRadius = '9999px'; mask.style.inset = '32px 96px';
+    } else {
+      mask.style.borderRadius = '10px'; mask.style.inset = '40px 24px';
+    }
+    openModal('modal-crop');
+  }
+
+  // Gerenciar cliente (Admin) com dados de uso
+  function openClient(name, email, tokens, cost) {
+    document.getElementById('client-name').textContent = name;
+    document.getElementById('client-email').textContent = email;
+    document.getElementById('client-initial').textContent = name.charAt(0);
+    document.getElementById('client-tokens').textContent = tokens;
+    document.getElementById('client-cost').textContent = cost;
+    openModal('modal-client');
+  }
+
+  // fecha modal ao clicar no backdrop
+  document.querySelectorAll('.modal-backdrop').forEach(m => {
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+  });
+
+  // Gráfico de atividade (7 dias) com barras + tooltip no hover
+  const activity = [
+    { day:'seg', n:4 }, { day:'ter', n:7 }, { day:'qua', n:5 },
+    { day:'qui', n:11 }, { day:'sex', n:9 }, { day:'sáb', n:3 }, { day:'dom', n:6 }
+  ];
+  function renderActivity() {
+    const chart = document.getElementById('activity-chart');
+    const labels = document.getElementById('activity-labels');
+    if (!chart) return;
+    const max = Math.max(...activity.map(a => a.n));
+    chart.innerHTML = activity.map(a => {
+      const h = Math.round((a.n / max) * 100);
+      return `<div class="bar flex-1 rounded-t bg-brand-400 dark:bg-brand-500 cursor-pointer" style="height:${h}%">
+        <span class="bar-tip">${a.n} carrosséis</span></div>`;
+    }).join('');
+    labels.innerHTML = activity.map(a => `<span class="flex-1 text-center">${a.day}</span>`).join('');
+  }
+  renderActivity();
+
+  // Histórico: filtro sobre lista plana única (nunca agrupa).
+  // Hierarquia inclusiva: today ⊂ week ⊂ month ⊂ all.
+  const periodScope = {
+    today: ['today'],
+    week: ['today', 'week'],
+    month: ['today', 'week', 'month'],
+    all: ['today', 'week', 'month']
+  };
+  function setPeriod(period) {
+    const allow = periodScope[period] || periodScope.all;
+    document.querySelectorAll('.hist-card').forEach(c => {
+      c.style.display = allow.includes(c.dataset.period) ? '' : 'none';
+    });
+    document.querySelectorAll('.period-pill').forEach(p => {
+      const on = p.dataset.period === period;
+      p.className = 'period-pill px-3 py-1.5 rounded-lg text-xs font-medium ' +
+        (on ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800');
+    });
+  }
+</script>
+</body>
+</html>
