@@ -6,22 +6,31 @@
 // (2) Zod na borda, (3) query SEMPRE filtrando por ownerId da sessao. Este arquivo
 // "use server" exporta SOMENTE funcoes async; schema/tipos vivem em settings-types.ts.
 
+import { compare, hash } from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { clients } from "@/db/schema";
+import { clients, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth-guard";
 import { getDefaultClient } from "@/lib/client-repo";
 import {
+  ChangePasswordSchema,
   ClientSettingsSchema,
+  type ChangePasswordInput,
+  type ChangePasswordResult,
   type ClientSettings,
+  type ClientSettingsWithOnboarding,
+  type CompleteOnboardingResult,
   type UpdateClientSettingsResult,
 } from "@/lib/actions/settings-types";
 
+const BCRYPT_COST = 12;
+
 /**
- * Le a identidade padrao do dono (client mais antigo). requireUser + filtro por
- * ownerId dentro de getDefaultClient => nunca retorna a marca de outro dono.
+ * Le a identidade padrao do dono (client mais antigo) + estado de onboarding.
+ * requireUser + filtro por ownerId dentro de getDefaultClient => nunca retorna
+ * a marca de outro dono.
  */
-export async function getClientSettings(): Promise<ClientSettings> {
+export async function getClientSettings(): Promise<ClientSettingsWithOnboarding> {
   const user = await requireUser();
   const client = await getDefaultClient(user.id);
 
@@ -32,6 +41,9 @@ export async function getClientSettings(): Promise<ClientSettings> {
     verified: client.verified,
     // theme no banco e text; normaliza para o union fechado (default light).
     theme: client.theme === "dark" ? "dark" : "light",
+    onboardingCompletedAt: client.onboardingCompletedAt
+      ? client.onboardingCompletedAt.toISOString()
+      : null,
   };
 }
 
@@ -67,4 +79,83 @@ export async function updateClientSettings(
     .where(and(eq(clients.id, client.id), eq(clients.ownerId, user.id)));
 
   return { ok: true, updatedAt: now.toISOString() };
+}
+
+/**
+ * Igual a updateClientSettings, mas tambem marca o onboarding como concluido
+ * (onboardingCompletedAt = now). Usada pela tela de onboarding do cliente novo
+ * (identidade placeholder criada por createClientAccount) para sair do estado
+ * "pendente" na primeira configuracao da marca.
+ */
+export async function completeOnboarding(
+  input: ClientSettings,
+): Promise<CompleteOnboardingResult> {
+  const user = await requireUser();
+
+  // Borda: rejeicao lanca ZodError antes de qualquer efeito colateral.
+  const data = ClientSettingsSchema.parse(input);
+
+  const client = await getDefaultClient(user.id);
+
+  const now = new Date();
+  await db
+    .update(clients)
+    .set({
+      name: data.name,
+      handle: data.handle,
+      avatarUrl: data.avatarUrl,
+      verified: data.verified,
+      theme: data.theme,
+      onboardingCompletedAt: now,
+      updatedAt: now,
+    })
+    // ownerId reforcado na escrita (nunca edita marca de outro dono).
+    .where(and(eq(clients.id, client.id), eq(clients.ownerId, user.id)));
+
+  return {
+    ok: true,
+    updatedAt: now.toISOString(),
+    onboardingCompletedAt: now.toISOString(),
+  };
+}
+
+/**
+ * Troca a senha do usuario logado. Confirma a senha ATUAL antes de gravar a
+ * nova (nunca troca sem provar posse da senha antiga). Hash bcrypt custo 12
+ * (mesmo padrao de auth.ts/create-client.mjs/seed.mjs). Nunca loga senha em
+ * texto — nem a atual nem a nova.
+ */
+export async function changePassword(
+  input: ChangePasswordInput,
+): Promise<ChangePasswordResult> {
+  const user = await requireUser();
+
+  // Borda: rejeicao lanca ZodError antes de qualquer efeito colateral.
+  const data = ChangePasswordSchema.parse(input);
+
+  const rows = await db
+    .select({ passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) {
+    throw new Error("Usuário não encontrado.");
+  }
+
+  const currentOk = await compare(data.currentPassword, row.passwordHash);
+  if (!currentOk) {
+    throw new Error("Senha atual incorreta.");
+  }
+
+  const newHash = await hash(data.newPassword, BCRYPT_COST);
+
+  await db
+    .update(users)
+    .set({ passwordHash: newHash })
+    // ownerId (o proprio id do usuario logado) reforcado na escrita.
+    .where(eq(users.id, user.id));
+
+  return { ok: true };
 }

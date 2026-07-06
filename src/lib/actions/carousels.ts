@@ -6,7 +6,7 @@
 // ownerId (falha fechado: id de outro dono => notFound, nao vaza dado alheio).
 
 import { notFound } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { carousels, clients, slides } from "@/db/schema";
@@ -16,6 +16,7 @@ import {
   identityToOverride,
   rowToEditorState,
   themeToOverride,
+  truncateSnippet,
 } from "@/lib/carousel-mapping";
 import type { EditorState } from "@/lib/editor-state";
 import { DEFAULT_CAROUSEL_TITLE } from "@/lib/editor-state";
@@ -130,9 +131,14 @@ export async function createGeneratedCarousel(
   return { id };
 }
 
+/** Tamanho maximo do snippet textual do primeiro slide na listagem. */
+const FIRST_SLIDE_SNIPPET_MAX_LENGTH = 60;
+
 /**
- * Lista os carrosseis do dono (id, title, updatedAt), mais recentes primeiro.
- * Filtra por ownerId — nunca lista de outro dono.
+ * Lista os carrosseis do dono (id, title, datas, contagem de slides e snippet
+ * do 1o slide), mais recentes primeiro. Filtra por ownerId — nunca lista de
+ * outro dono. Segunda query (slides) so roda se houver carrosseis — evita ida
+ * ao banco a toa quando a lista esta vazia.
  */
 export async function listCarousels(): Promise<CarouselListItem[]> {
   const user = await requireUser();
@@ -142,16 +148,45 @@ export async function listCarousels(): Promise<CarouselListItem[]> {
       id: carousels.id,
       title: carousels.title,
       updatedAt: carousels.updatedAt,
+      createdAt: carousels.createdAt,
     })
     .from(carousels)
     .where(eq(carousels.ownerId, user.id))
     .orderBy(desc(carousels.updatedAt));
 
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id);
+
+  const slideRows = await db
+    .select({
+      carouselId: slides.carouselId,
+      position: slides.position,
+      body: slides.body,
+    })
+    .from(slides)
+    .where(inArray(slides.carouselId, ids));
+
+  // Agrega por carouselId: contagem total + body da position 0 (thumbnail textual).
+  const slideInfoByCarousel = new Map<string, { count: number; firstBody: string }>();
+  for (const s of slideRows) {
+    const info = slideInfoByCarousel.get(s.carouselId) ?? { count: 0, firstBody: "" };
+    info.count += 1;
+    if (s.position === 0) info.firstBody = s.body;
+    slideInfoByCarousel.set(s.carouselId, info);
+  }
+
+  return rows.map((r) => {
+    const info = slideInfoByCarousel.get(r.id) ?? { count: 0, firstBody: "" };
+    return {
+      id: r.id,
+      title: r.title,
+      updatedAt: r.updatedAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+      slideCount: info.count,
+      firstSlideBody: truncateSnippet(info.firstBody, FIRST_SLIDE_SNIPPET_MAX_LENGTH),
+    };
+  });
 }
 
 /**

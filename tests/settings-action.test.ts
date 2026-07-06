@@ -13,9 +13,12 @@ const mockState = vi.hoisted(() => {
     whereArgs: [] as unknown[],
     updateCalled: false,
     setArgs: [] as unknown[],
+    // Fila de resultados de `db.select(...)` (changePassword busca o hash atual).
+    selectResults: [] as unknown[],
+    selectCursor: 0,
   };
 
-  function makeChainBuilder(): Record<string, unknown> {
+  function makeChainBuilder(kind: "select" | "update"): Record<string, unknown> {
     const builder: Record<string, unknown> = {};
     const chain =
       (name: string) =>
@@ -24,19 +27,28 @@ const mockState = vi.hoisted(() => {
         if (name === "set") state.setArgs.push(args[0]);
         return builder;
       };
-    for (const method of ["update", "set", "where"]) {
+    for (const method of ["select", "from", "limit", "update", "set", "where"]) {
       builder[method] = chain(method);
     }
-    // Thenable: `await builder` resolve vazio (o update nao retorna nada usado).
-    builder.then = (resolve: (v: unknown) => void) => resolve([]);
+    builder.then = (resolve: (v: unknown) => void) => {
+      if (kind === "select") {
+        const value = state.selectResults[state.selectCursor] ?? [];
+        state.selectCursor += 1;
+        resolve(value);
+        return;
+      }
+      // update: nao retorna nada usado pelo codigo.
+      resolve([]);
+    };
     return builder;
   }
 
   const db = {
     update: () => {
       state.updateCalled = true;
-      return makeChainBuilder();
+      return makeChainBuilder("update");
     },
+    select: () => makeChainBuilder("select"),
   };
 
   return { state, db };
@@ -57,7 +69,13 @@ vi.mock("@/lib/client-repo", () => ({
   getDefaultClient: (ownerId: string) => getDefaultClientMock(ownerId),
 }));
 
-import { getClientSettings, updateClientSettings } from "@/lib/actions/settings";
+import { hash } from "bcryptjs";
+import {
+  changePassword,
+  completeOnboarding,
+  getClientSettings,
+  updateClientSettings,
+} from "@/lib/actions/settings";
 import type { ClientSettings } from "@/lib/actions/settings-types";
 
 // Varredura recursiva atras de um valor (o where do Drizzle guarda o valor em
@@ -89,6 +107,7 @@ function clientRow(overrides: Record<string, unknown> = {}) {
     avatarUrl: "data:image/svg+xml,<svg/>",
     verified: false,
     theme: "light",
+    onboardingCompletedAt: null as Date | null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -109,6 +128,8 @@ beforeEach(() => {
   mockState.state.whereArgs.length = 0;
   mockState.state.setArgs.length = 0;
   mockState.state.updateCalled = false;
+  mockState.state.selectResults = [];
+  mockState.state.selectCursor = 0;
   requireUserMock.mockReset();
   requireUserMock.mockResolvedValue({
     id: SESSION_USER_ID,
@@ -129,7 +150,7 @@ describe("getClientSettings — leitura do dono", () => {
     expect(getDefaultClientMock).toHaveBeenCalledWith(SESSION_USER_ID);
   });
 
-  it("projeta os 5 campos da identidade", async () => {
+  it("projeta os 5 campos da identidade + onboardingCompletedAt", async () => {
     getDefaultClientMock.mockResolvedValue(
       clientRow({ name: "Marca X", handle: "marcax", verified: true, theme: "dark" }),
     );
@@ -140,6 +161,7 @@ describe("getClientSettings — leitura do dono", () => {
       avatarUrl: "data:image/svg+xml,<svg/>",
       verified: true,
       theme: "dark",
+      onboardingCompletedAt: null,
     });
   });
 
@@ -147,6 +169,13 @@ describe("getClientSettings — leitura do dono", () => {
     getDefaultClientMock.mockResolvedValue(clientRow({ theme: "sepia" }));
     const s = await getClientSettings();
     expect(s.theme).toBe("light");
+  });
+
+  it("onboardingCompletedAt em ISO quando o client já concluiu o onboarding", async () => {
+    const completedAt = new Date("2026-05-01T10:00:00.000Z");
+    getDefaultClientMock.mockResolvedValue(clientRow({ onboardingCompletedAt: completedAt }));
+    const s = await getClientSettings();
+    expect(s.onboardingCompletedAt).toBe("2026-05-01T10:00:00.000Z");
   });
 });
 
@@ -222,5 +251,91 @@ describe("updateClientSettings — validação e isolamento por dono", () => {
       }),
     ).rejects.toBeTruthy();
     expect(mockState.state.updateCalled).toBe(false);
+  });
+});
+
+// =============================================================================
+// completeOnboarding — igual a updateClientSettings, mas fecha o onboarding
+// =============================================================================
+describe("completeOnboarding — validação + marca onboardingCompletedAt", () => {
+  it("persiste válido e retorna ok + updatedAt + onboardingCompletedAt em ISO", async () => {
+    const result = await completeOnboarding(validSettings());
+    expect(requireUserMock).toHaveBeenCalledTimes(1);
+    expect(mockState.state.updateCalled).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(Number.isNaN(Date.parse(result.updatedAt))).toBe(false);
+    expect(Number.isNaN(Date.parse(result.onboardingCompletedAt))).toBe(false);
+  });
+
+  it("grava onboardingCompletedAt no SET (não fica pendente)", async () => {
+    await completeOnboarding(validSettings());
+    const hasOnboardingField = mockState.state.setArgs.some(
+      (s) => typeof s === "object" && s !== null && "onboardingCompletedAt" in s,
+    );
+    expect(hasOnboardingField).toBe(true);
+  });
+
+  it("o UPDATE filtra por ownerId da sessão (isolamento por dono)", async () => {
+    await completeOnboarding(validSettings());
+    const hasOwnerFilter = mockState.state.whereArgs.some((w) =>
+      containsValue(w, SESSION_USER_ID),
+    );
+    expect(hasOwnerFilter).toBe(true);
+  });
+
+  it("entrada inválida (handle vazio) rejeita sem gravar — mesma validação de updateClientSettings", async () => {
+    await expect(
+      completeOnboarding({ ...validSettings(), handle: "" }),
+    ).rejects.toBeTruthy();
+    expect(mockState.state.updateCalled).toBe(false);
+  });
+});
+
+// =============================================================================
+// changePassword — confirma a senha atual antes de trocar
+// =============================================================================
+describe("changePassword — confirmação da senha atual e troca do hash", () => {
+  const CURRENT_PASSWORD = "senha-atual-123";
+
+  beforeEach(async () => {
+    // Custo baixo so pra acelerar o teste — o custo de PRODUCAO (12) e fixo
+    // dentro de changePassword, aplicado so a senha NOVA.
+    const currentHash = await hash(CURRENT_PASSWORD, 4);
+    mockState.state.selectResults = [[{ passwordHash: currentHash }]];
+  });
+
+  it("troca a senha quando a atual confere", async () => {
+    const result = await changePassword({
+      currentPassword: CURRENT_PASSWORD,
+      newPassword: "nova-senha-456",
+    });
+    expect(requireUserMock).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    expect(mockState.state.updateCalled).toBe(true);
+  });
+
+  it("senha atual incorreta rejeita sem gravar", async () => {
+    await expect(
+      changePassword({ currentPassword: "senha-errada", newPassword: "nova-senha-456" }),
+    ).rejects.toBeTruthy();
+    expect(mockState.state.updateCalled).toBe(false);
+  });
+
+  it("nova senha curta (<8) rejeita pelo Zod antes de tocar o banco", async () => {
+    await expect(
+      changePassword({ currentPassword: CURRENT_PASSWORD, newPassword: "curta" }),
+    ).rejects.toBeTruthy();
+    expect(mockState.state.updateCalled).toBe(false);
+  });
+
+  it("o UPDATE filtra pelo id do usuário da sessão", async () => {
+    await changePassword({
+      currentPassword: CURRENT_PASSWORD,
+      newPassword: "nova-senha-456",
+    });
+    const hasUserFilter = mockState.state.whereArgs.some((w) =>
+      containsValue(w, SESSION_USER_ID),
+    );
+    expect(hasUserFilter).toBe(true);
   });
 });

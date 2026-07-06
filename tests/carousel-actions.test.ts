@@ -366,20 +366,62 @@ describe("listCarousels — só os do dono (AC 18)", () => {
     expect(hasOwnerFilter).toBe(true);
   });
 
-  it("mapeia as linhas para CarouselListItem com updatedAt em ISO", async () => {
+  it("mapeia as linhas para CarouselListItem com datas ISO, slideCount e snippet do 1o slide", async () => {
     const updatedAt = new Date("2026-06-30T12:00:00.000Z");
-    mockState.state.dbResults = [[{ id: VALID_UUID, title: "X", updatedAt }]];
+    const createdAt = new Date("2026-06-01T09:00:00.000Z");
+    mockState.state.dbResults = [
+      [{ id: VALID_UUID, title: "X", updatedAt, createdAt }],
+      [
+        { carouselId: VALID_UUID, position: 0, body: "Primeiro slide" },
+        { carouselId: VALID_UUID, position: 1, body: "Segundo slide" },
+      ],
+    ];
 
     const list = await listCarousels();
 
     expect(list).toEqual([
-      { id: VALID_UUID, title: "X", updatedAt: "2026-06-30T12:00:00.000Z" },
+      {
+        id: VALID_UUID,
+        title: "X",
+        updatedAt: "2026-06-30T12:00:00.000Z",
+        createdAt: "2026-06-01T09:00:00.000Z",
+        slideCount: 2,
+        firstSlideBody: "Primeiro slide",
+      },
     ]);
   });
 
-  it("lista vazia quando o dono não tem carrosséis", async () => {
+  it("lista vazia quando o dono não tem carrosséis (não roda a query de slides)", async () => {
     mockState.state.dbResults = [[]];
     expect(await listCarousels()).toEqual([]);
+    // So 1 resultado consumido da fila — a 2a query (slides) nunca rodou.
+    expect(mockState.state.resultCursor).toBe(1);
+  });
+
+  it("trunca o snippet do primeiro slide em ~60 caracteres", async () => {
+    const now = new Date();
+    const longBody = "a".repeat(100);
+    mockState.state.dbResults = [
+      [{ id: VALID_UUID, title: "X", updatedAt: now, createdAt: now }],
+      [{ carouselId: VALID_UUID, position: 0, body: longBody }],
+    ];
+
+    const [item] = await listCarousels();
+
+    expect(item?.firstSlideBody.length).toBeLessThanOrEqual(61); // 60 + "…"
+    expect(item?.firstSlideBody.endsWith("…")).toBe(true);
+  });
+
+  it("carrossel sem slides retorna slideCount 0 e snippet vazio", async () => {
+    const now = new Date();
+    mockState.state.dbResults = [
+      [{ id: VALID_UUID, title: "X", updatedAt: now, createdAt: now }],
+      [],
+    ];
+
+    const [item] = await listCarousels();
+
+    expect(item).toMatchObject({ slideCount: 0, firstSlideBody: "" });
   });
 });
 

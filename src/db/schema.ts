@@ -13,12 +13,14 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-// --- users — quem loga (so admin nesta fase) ---------------------------------
+// --- users — quem loga ---------------------------------------------------------
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name"), // nullable — nome de exibicao opcional
+  // 'admin' | 'client' — enforced no app (Zod); text simples no banco.
+  role: text("role").notNull().default("client"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -38,6 +40,10 @@ export const clients = pgTable(
     verified: boolean("verified").notNull().default(false),
     // 'light' | 'dark' — enforced no app (Zod); text simples no banco.
     theme: text("theme").notNull().default("light"),
+    // null = onboarding ainda nao concluido pelo client.
+    onboardingCompletedAt: timestamp("onboarding_completed_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
