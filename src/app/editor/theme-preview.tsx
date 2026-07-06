@@ -24,7 +24,7 @@ import {
 // Preview escalado — fatia herda a formula validada em render-test/page.tsx. O no
 // do <Slide> continua em 1080x1350 REAIS; a escala e SO CSS visual (nunca `zoom`,
 // nunca mexer em width/height do no, para nao quebrar a fidelidade do export S4).
-const PREVIEW_W = 460;
+const PREVIEW_W = 400;
 const PREVIEW_SCALE = PREVIEW_W / CANVAS_W;
 
 interface ThemePreviewProps {

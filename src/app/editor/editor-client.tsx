@@ -459,17 +459,23 @@ export function EditorClient({ initialState }: EditorClientProps) {
             ) : null}
           </div>
 
-          {/* Preview protagonista. */}
-          <ThemePreview
-            identity={state.identity}
-            theme={state.theme}
-            slides={state.slides}
-            slide={selectedSlide}
-            dispatch={dispatch}
-          />
-
-          {/* Identidade ABAIXO do preview. */}
-          <IdentityPanel identity={state.identity} dispatch={dispatch} />
+          {/* Preview (à esquerda) + Identidade (à direita), lado a lado em telas
+              largas; empilha abaixo de xl. O preview fica compacto à esquerda e a
+              identidade preenche a direita, equilibrando o espaço. */}
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+            <div className="xl:w-[432px] xl:shrink-0">
+              <ThemePreview
+                identity={state.identity}
+                theme={state.theme}
+                slides={state.slides}
+                slide={selectedSlide}
+                dispatch={dispatch}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <IdentityPanel identity={state.identity} dispatch={dispatch} />
+            </div>
+          </div>
         </div>
       </div>
 
