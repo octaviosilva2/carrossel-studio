@@ -4,11 +4,15 @@
 > `CLAUDE.md` e `docs/VISAO.md`.
 
 ## Última atualização
-2026-07-06 — **ADR 0004 (redesign de UI/UX) EM EXECUÇÃO.** Mockup aprovado
-(`docs/mockups/redesign-v1.html`), implementação real rodando em 2 sessões paralelas
-isoladas por `git worktree` (`feature/redesign-backend` e `feature/redesign-frontend`).
-Merge e teste pós-merge pendentes. Ver `docs/adr/0004-redesign-ui-ux.md` e
-`docs/sessoes/2026-07-06-adr0004-redesign-ui-ux.md`.
+2026-07-06 — **ADR 0004 (redesign de UI/UX): merge e integração concluídos, falta o
+teste pós-merge e o push.** Backend e frontend implementados em paralelo (worktrees
+isolados), mesclados em `main` (conflito único em `auth-guard.ts`, resolvido), mocks
+temporários do frontend trocados pelas actions reais do backend (admin, onboarding,
+troca de senha, contadores/histórico com `createdAt`/`slideCount` reais). Rota
+`/generate` aposentada (decisão do CEO). **322 testes (321 passed, 1 skip), type-check
+e build de produção limpos.** Nada commitado foi enviado (`push`) ainda — pendente
+teste manual pós-merge e confirmação explícita do Octavio. Ver
+`docs/adr/0004-redesign-ui-ux.md` e `docs/sessoes/2026-07-06-adr0004-redesign-ui-ux.md`.
 
 2026-07-03 — **ADR 0003 (correções de segurança pós-auditoria) CONCLUÍDA.** CORS do MinIO
 confirmado correto, headers HTTP de segurança adicionados, rate limit no login implementado

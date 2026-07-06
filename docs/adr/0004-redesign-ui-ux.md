@@ -1,7 +1,7 @@
 # ADR 0004 — Redesign de UI/UX da plataforma
 
 - **Data:** 2026-07-06
-- **Status:** Em execução (backend e frontend implementando em paralelo)
+- **Status:** Merge e integração concluídos; aguardando teste pós-merge (smoke manual)
 - **Decisor:** CEO (Octavio) e CTO (Claude)
 - **Origem:** as 6 sessões do roadmap entregaram o produto funcional (S1–S6), mas nenhuma
   delas incluiu um desenho de UI/UX dedicado — as telas foram implementadas "funcionais"
@@ -101,14 +101,27 @@ registrados em `docs/sessoes/2026-07-06-adr0004-redesign-ui-ux.md`.
 
 | Etapa | Onde | Status |
 |---|---|---|
-| Backend (migrations, actions, auth/role) | worktree `carrossel-studio-backend` | Em execução |
-| Frontend (páginas, shell, componentes shadcn) | worktree `carrossel-studio-frontend` | Em execução |
-| Merge das duas branches em `main` | repo principal | Pendente |
+| Backend (migrations, actions, auth/role) | worktree `carrossel-studio-backend` | ✅ Concluído (commit `4935629`) |
+| Frontend (páginas, shell, componentes shadcn) | worktree `carrossel-studio-frontend` | ✅ Concluído (commit `ffdf9f3`) |
+| Merge das duas branches em `main` | repo principal | ✅ Concluído (conflito único em `src/lib/auth-guard.ts`, resolvido mantendo a versão real do backend) |
+| Integração dos mocks pelas actions reais + rota `/generate` aposentada | repo principal | ✅ Concluído (commit `bac89f4`) — **322 testes (321 passed, 1 skip), type-check e build limpos** |
 | Teste independente pós-merge (funcional + responsivo + segurança do Admin) | sessão nova | Pendente |
+| Push para `main` (dispara deploy Vercel no domínio de produção) | repo principal | Pendente confirmação explícita do Octavio |
 
-Critério de aceite: `npm run test` + `npm run build` verdes nas duas branches antes do
-merge; veredito PASS/FAIL por item no teste pós-merge antes de considerar a ADR
-concluída. Commit(s) e push só com confirmação explícita do Octavio.
+Critério de aceite: `npm run test` + `npm run build` verdes (cumprido); veredito
+PASS/FAIL por item no teste pós-merge antes do push. Commit(s) e push só com
+confirmação explícita do Octavio.
+
+### Decisões tomadas durante a integração (não previstas no plano original)
+- Redirect pós-login trocado de `/carousels` para `/dashboard` (nova home).
+- Admin sem coluna "status"/suspender cliente — não existe no schema; cortado
+  do form e da tabela (YAGNI, mesma lógica do resto da ADR).
+- Cards de Dashboard/Histórico passaram a mostrar `slideCount` e um trecho do
+  primeiro slide (`firstSlideBody`) como preview textual, já que o backend
+  estendeu `CarouselListItem` com esses campos.
+- `/generate` (página de geração por IA de S5) foi **removida** por decisão do
+  CEO — mas a action `generateCarousel` e seus testes permanecem intactos,
+  disponíveis para uma futura integração com o Assistente de IA do editor.
 
 ---
 
