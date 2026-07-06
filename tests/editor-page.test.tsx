@@ -6,9 +6,15 @@ import { render, screen, fireEvent } from "@testing-library/react";
 // o comportamento das actions e coberto por seus proprios testes.
 vi.mock("@/lib/actions/carousels", () => ({
   saveCarousel: vi.fn(),
+  deleteCarousel: vi.fn(),
 }));
 vi.mock("@/lib/blob-upload", () => ({
   uploadImageToBlob: vi.fn(),
+}));
+// EditorClient (redesign) usa useRouter() (botao Excluir). Fora de um App
+// Router de verdade, o hook exige este mock — nenhuma navegacao roda no teste.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import { EditorClient } from "@/app/editor/editor-client";

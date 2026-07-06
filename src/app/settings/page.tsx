@@ -1,47 +1,49 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import { AppShell } from "@/components/app-shell/app-shell";
 import { requireUser } from "@/lib/auth-guard";
 import { getClientSettings } from "@/lib/actions/settings";
+import { getOnboardingCompletedAtMock, isAdminUser } from "@/lib/mock-redesign";
 import { SettingsForm } from "./settings-form";
 
 // Nao cachear: reflete a identidade padrao persistida mais recente do dono.
 export const dynamic = "force-dynamic";
 
+interface SettingsPageProps {
+  searchParams: Promise<{ tab?: string }>;
+}
+
 /**
- * Tela de configuracao da identidade padrao (marca) do cliente (S6). Server
- * Component: requireUser() barra deslogado (-> /login) e getClientSettings() traz
- * SOMENTE a marca do dono. O form (client) edita e salva via updateClientSettings.
- * Esta identidade e a herdada por todo carrossel novo (overrides null herdam dela).
+ * Tela de configuracao (redesign): abas Identidade/Conta dentro do AppShell.
+ * requireUser() barra deslogado (-> /login); getClientSettings() traz a marca
+ * do dono. `?tab=account` (usado pelo rodape da sidebar) abre direto na aba Conta.
  */
-export default async function SettingsPage() {
-  await requireUser();
-  const settings = await getClientSettings();
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
+  const user = await requireUser();
+  const [settings, params] = await Promise.all([
+    getClientSettings(),
+    searchParams,
+  ]);
+  const isAdmin = isAdminUser(user.role);
+
+  const initialTab = params.tab === "account" ? "account" : "identity";
 
   return (
-    <main className="min-h-screen bg-background px-6 py-10">
-      <div className="mx-auto max-w-2xl">
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Configurações
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Identidade padrão da marca. Todo carrossel novo herda estes dados.
-            </p>
-          </div>
+    <AppShell
+      userName={user.name ?? user.email ?? "Usuário"}
+      userEmail={user.email ?? ""}
+      isAdmin={isAdmin}
+    >
+      <header className="sticky top-14 z-10 flex h-14 items-center border-b border-border bg-background/80 px-5 backdrop-blur lg:top-0">
+        <h1 className="text-sm font-semibold">Configurações</h1>
+      </header>
 
-          <Button asChild variant="outline" size="sm">
-            <Link href="/carousels">
-              <ArrowLeft className="h-4 w-4" />
-              Voltar
-            </Link>
-          </Button>
-        </header>
-
-        <SettingsForm initial={settings} />
+      <div className="max-w-2xl p-5">
+        <SettingsForm
+          initial={settings}
+          userEmail={user.email ?? ""}
+          initialTab={initialTab}
+          onboardingCompletedAt={getOnboardingCompletedAtMock()}
+        />
       </div>
-    </main>
+    </AppShell>
   );
 }

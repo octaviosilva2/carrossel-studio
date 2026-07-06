@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 import type { CarouselIdentity, EditorAction } from "@/lib/editor-state";
 import { validateImageFile } from "@/lib/image-upload";
 import { uploadImageToBlob } from "@/lib/blob-upload";
@@ -31,6 +32,8 @@ export function IdentityPanel({ identity, dispatch }: IdentityPanelProps) {
   const [avatarError, setAvatarError] = useState<string>("");
   // Upload em voo: desabilita o botao e evita duplo envio.
   const [isUploading, setIsUploading] = useState(false);
+  // Arquivo validado aguardando o passo visual de "ajustar imagem" (crop mock).
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Handle: remove qualquer "@" no onChange (o <Slide> prefixa "@" na render).
@@ -39,13 +42,13 @@ export function IdentityPanel({ identity, dispatch }: IdentityPanelProps) {
     dispatch({ type: "UPDATE_IDENTITY", patch: { handle: stripped } });
   }
 
-  async function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     // Cancelou o picker: no-op.
     if (!file) return;
 
     // Validacao client antecipada (mesma regra 6 MB/tipo). O wrapper reforca isso,
-    // mas checar aqui evita mostrar "enviando" para um arquivo ja invalido.
+    // mas checar aqui evita mostrar o dialog de ajuste para um arquivo ja invalido.
     const validation = validateImageFile(file);
     if (!validation.ok) {
       // Rejeitado: mostra o erro e NAO despacha (avatar anterior permanece).
@@ -54,20 +57,32 @@ export function IdentityPanel({ identity, dispatch }: IdentityPanelProps) {
       return;
     }
 
+    setAvatarError("");
+    // Abre o modal de "ajustar imagem" (visual) antes do upload real.
+    setPendingAvatarFile(file);
+    e.target.value = "";
+  }
+
+  /** Confirmado no modal de ajuste: segue com o upload REAL do arquivo original. */
+  async function handleCropConfirm() {
+    if (!pendingAvatarFile) return;
+
     // Envia ao Vercel Blob (upload real, S3). Em sucesso grava a URL https; em
     // falha mostra erro inline e NAO altera o estado (avatar anterior permanece).
     setIsUploading(true);
-    setAvatarError("");
-    const result = await uploadImageToBlob(file);
+    const result = await uploadImageToBlob(pendingAvatarFile);
     setIsUploading(false);
-    // Permite reenviar o mesmo arquivo depois (senao o onChange nao dispara).
-    e.target.value = "";
+    setPendingAvatarFile(null);
 
     if (result.ok) {
       dispatch({ type: "SET_AVATAR", avatarUrl: result.url });
     } else {
       setAvatarError(result.error);
     }
+  }
+
+  function handleCropCancel() {
+    setPendingAvatarFile(null);
   }
 
   function handleRemoveAvatar() {
@@ -171,6 +186,14 @@ export function IdentityPanel({ identity, dispatch }: IdentityPanelProps) {
           />
         </div>
       </CardContent>
+
+      <ImageCropDialog
+        file={pendingAvatarFile}
+        shape="circle"
+        onCancel={handleCropCancel}
+        onConfirm={handleCropConfirm}
+        isBusy={isUploading}
+      />
     </Card>
   );
 }
