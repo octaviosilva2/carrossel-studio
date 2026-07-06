@@ -41,7 +41,7 @@ em tablet/mobile. Sete telas:
 | Login | `/login` | redesenho visual, lógica de auth intacta |
 | Onboarding (1ª vez) | `/onboarding` (nova) | identidade (avatar, nome, @handle) — **sem** campo de tema |
 | Dashboard (nova home) | `/dashboard` (nova) | contadores Total/Mês/Semana/Hoje + recentes + atividade 7 dias |
-| Criação/edição unificada | `/editor` | 3 colunas: Assistente IA \| Slides manual \| Preview |
+| Criação/edição unificada | `/editor` | 2 colunas: Edição (slides) \| Preview protagonista; Assistente IA em drawer (ver §6) |
 | Histórico | `/carousels` | busca + filtro de período, lista única (nunca agrupada por seção) |
 | Configurações | `/settings` | abas Identidade / Conta — **sem** campo de tema |
 | Admin (CEO) | `/admin` (nova) | criar cliente (e-mail + senha), lista de clientes |
@@ -52,8 +52,11 @@ em tablet/mobile. Sete telas:
 - **Tema claro/escuro do APP** é um conceito separado (preferência de UI da plataforma,
   toggle no rodapé da sidebar) — não confundir com o anterior.
 - **Autosave** substitui o botão "Salvar" manual no editor.
-- **Assistente de IA sempre visível** na tela de criação, sem opção de fechar (só recolhe
-  a sidebar de navegação, não o assistente).
+- ~~**Assistente de IA sempre visível** na tela de criação, sem opção de fechar~~
+  **REVISADO (2026-07-06, ver §6):** o assistente passou a ser **recolhido por padrão**,
+  abrindo por botão no header (drawer sobreposto). Motivo: simplicidade e dar espaço ao
+  preview — o CEO avaliou que a coluna fixa do assistente comprimia a tela e obrigava a
+  rolar.
 - **Admin cria cliente só com e-mail + senha provisória** — identidade é preenchida pelo
   próprio cliente no onboarding (mesmo modelo done-for-you do playbook, só que a
   configuração fina passa a ser self-service no primeiro login).
@@ -64,12 +67,15 @@ em tablet/mobile. Sete telas:
 - **Chat conversacional incremental de verdade** (a IA editando o carrossel existente a
   cada mensagem, chamando a Claude API de novo com o estado atual) — é uma mudança de
   arquitetura sobre `generateCarousel` (hoje uma chamada única), com custo e complexidade
-  próprios. Nesta ADR o assistente é **visual/mockado**; a implementação real é uma fatia
-  futura, com research e spec próprios.
+  próprios. **PARCIALMENTE ENTREGUE (2026-07-06, ver §6):** o assistente deixou de ser
+  mockado e agora **gera de verdade** a partir do prompt (geração única, aplicada no
+  carrossel aberto). O *chat incremental* (reeditar slide a slide com contexto) segue
+  deferido.
 - **Tracking real de uso de tokens/custo por cliente** — não existe tabela para isso;
   o painel de Admin mostra placeholder até essa fatia ser priorizada.
-- **Corte real de imagem (crop)** — o modal de ajuste (avatar e imagem de slide) é
-  visual por enquanto, sem lógica de recorte de pixels.
+- ~~**Corte real de imagem (crop)**~~ **ENTREGUE (2026-07-06, ver §6):** o modal de ajuste
+  passou a recortar de verdade (react-easy-crop), com arrastar/zoom reais, avatar em
+  círculo 1:1 e imagem de slide com escolha de proporção.
 
 ---
 
@@ -138,4 +144,40 @@ não depender de UPDATE manual da próxima vez que precisar promover alguém.
 
 - Priorizar (ou não) o chat conversacional incremental como fatia própria.
 - Priorizar (ou não) tracking real de tokens/custo por cliente.
-- Priorizar (ou não) corte real de imagem (crop) no upload de avatar/slide.
+- ~~Priorizar (ou não) corte real de imagem (crop)~~ — feito (§6).
+
+---
+
+## 6. Revisão do editor (2026-07-06)
+
+Após o merge, o CEO revisou a tela `/editor` — excesso de informação empilhada
+obrigava a rolar, contra o objetivo de simplicidade. Três mudanças, executadas
+direto (sem esteira `dev-agents`, como o resto da ADR), com testes e build verdes.
+
+### 6.1 Layout — 2 colunas, preview protagonista
+- Assistente saiu da grade fixa de 3 colunas → sobram **2 colunas**: Edição
+  (`SlideNav` + `SlideEditor`, ~380px) à esquerda e **Preview protagonista**
+  (`flex-1`) à direita.
+- Na coluna do preview: botões de **exportação acima** do preview e **Identidade
+  do perfil abaixo** (decisão do CEO). Preview escalado de 420→460px.
+
+### 6.2 Assistente de IA — drawer + geração real
+- Vira botão **"Assistente IA"** no header, abrindo um `Sheet` (drawer à direita)
+  com banner **"Crie com IA"**, `x` para fechar e input **"Descreva o que criar…"**.
+- Deixou de ser mock: nova server action **`generateForEditor`** reusa a defesa em
+  camadas de `generateCarousel` (auth → Zod → Claude API → sanitização), mas
+  **devolve o resultado por união** (`{ ok, title, slides } | { ok:false, code }`)
+  em vez de persistir/redirecionar. O client aplica via novo reducer
+  **`APPLY_GENERATED`** (substitui título + slides do carrossel aberto); o autosave
+  persiste. `generateCarousel` original e seus testes seguem **intactos**.
+
+### 6.3 Crop real de imagem
+- Nova dependência **`react-easy-crop`** (`^6`). `ImageCropDialog` recorta de
+  verdade (util `src/lib/crop-image.ts`, via canvas): arrastar/zoom reais.
+- **Avatar**: círculo 1:1 (proporção de foto de perfil). **Imagem de slide**:
+  seletor de proporção (Original/1:1/4:5/16:9), padrão **Original** (preserva o
+  comportamento anterior). `onConfirm` agora entrega o **arquivo recortado** ao
+  upload (antes subia o original).
+
+**Verificação:** `npm run test` → 332 passed, 1 skip; `npm run type-check` e
+`npm run build` limpos.

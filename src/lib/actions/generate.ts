@@ -15,7 +15,9 @@ import { createGeneratedCarousel } from "@/lib/actions/carousels";
 import {
   GenerateInputSchema,
   GenerateError,
+  isGenerateError,
   type GenerateInput,
+  type GenerateForEditorResult,
 } from "@/lib/actions/generate-types";
 
 /**
@@ -60,4 +62,48 @@ export async function generateCarousel(input: GenerateInput): Promise<never> {
 
   // 6. Aterrissa no editor. redirect() lanca NEXT_REDIRECT (navegacao), nao erro real.
   redirect(`/editor?id=${id}`);
+}
+
+/**
+ * Gera slides a partir da intencao do usuario e DEVOLVE o resultado ao editor
+ * (ADR 0004 — Assistente de IA). Reusa a MESMA defesa em camadas de
+ * generateCarousel (auth -> Zod -> Claude API -> sanitizacao), mas NAO persiste
+ * nem redireciona: o assistente aplica o resultado no carrossel ja aberto
+ * (dispatch APPLY_GENERATED). O autosave existente cuida de salvar depois.
+ *
+ * Contrato de erro por UNIAO (nao throw): o client mostra a mensagem no chat sem
+ * derrubar o editor. So o `code` estavel viaja — a mensagem pt-BR e resolvida no
+ * client (nunca vaza detalhe tecnico). A unica excecao re-lancada e o redirect do
+ * requireUser (visitante sem sessao): deixamos o Next tratar a navegacao a /login.
+ */
+export async function generateForEditor(
+  input: GenerateInput,
+): Promise<GenerateForEditorResult> {
+  try {
+    // 1. Autenticacao (falha fechado). Sem sessao -> requireUser lanca redirect.
+    await requireUser();
+
+    // 2. Validacao da borda. Entrada malformada => INVALID_INPUT, sem chamar a API.
+    const parsed = GenerateInputSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, code: "INVALID_INPUT" };
+
+    // 3. Claude API + revalidacao Zod (camadas 1 e 2). Lanca GenerateError.
+    const generated = await requestGeneration(parsed.data.intent);
+
+    // 4. Sanitizacao + mapeamento (camada 3). null => nada utilizavel.
+    const mapped = mapGeneratedToSlideRows(generated);
+    if (mapped === null) return { ok: false, code: "GENERATION_FAILED" };
+
+    // 5. Devolve so o essencial ao editor (title + bodies ja sanitizados).
+    return {
+      ok: true,
+      title: mapped.title,
+      slides: mapped.slides.map((slide) => ({ body: slide.body })),
+    };
+  } catch (err) {
+    // GenerateError (NOT_CONFIGURED/GENERATION_FAILED) vira uniao tratavel.
+    if (isGenerateError(err)) return { ok: false, code: err.code };
+    // Qualquer outra coisa (ex.: NEXT_REDIRECT do requireUser) sobe intacta.
+    throw err;
+  }
 }

@@ -55,12 +55,16 @@ export async function requestGeneration(
     response = await client.messages.parse({
       model: GENERATE_MODEL,
       max_tokens: GENERATE_MAX_TOKENS,
-      // Raciocinio adaptativo para tarefa nao-trivial. NUNCA budget_tokens no
-      // Sonnet 4.6. Sem temperature/top_p/top_k (proibidos neste modelo).
-      thinking: { type: "adaptive" },
+      // Thinking desligado (2026-07-03): tarefa e geracao de texto curto, nao
+      // justifica raciocinio estendido — thinking em effort alto dominava o
+      // custo (a maior parte do output billado era pensamento, nao o carrossel).
+      // NUNCA budget_tokens no Sonnet 4.6. Sem temperature/top_p/top_k (proibidos).
+      thinking: { type: "disabled" },
       // Structured output: o schema restringe a FORMA da saida (camada 1). O helper
       // zodOutputFormat suporta zod v4 (importa de "zod/v4"; peer ^4.0.0 do SDK).
-      output_config: { format: zodOutputFormat(GeneratedCarouselSchema) },
+      // effort:"medium" troca thinking pela profundidade de esforco do proprio
+      // modelo (mais barato que high, sem cair pra low antes de medir qualidade).
+      output_config: { format: zodOutputFormat(GeneratedCarouselSchema), effort: "medium" },
       // Regras visuais no SYSTEM; intencao do usuario SO na mensagem `user`
       // (protecao contra prompt injection).
       system: GENERATE_SYSTEM_PROMPT,

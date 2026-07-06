@@ -56,14 +56,14 @@ export function SlideEditor({ slide, dispatch }: SlideEditorProps) {
     e.target.value = "";
   }
 
-  /** Confirmado no modal de ajuste: segue com o upload REAL do arquivo original. */
-  async function handleCropConfirm() {
+  /** Confirmado no modal de ajuste: sobe o arquivo JA RECORTADO (crop real). */
+  async function handleCropConfirm(croppedFile: File) {
     if (!pendingImageFile || !slide) return;
 
     // Envia ao Vercel Blob (upload real, S3). Em sucesso grava a URL https; em
     // falha mostra erro inline e NAO altera o estado (imagem anterior permanece).
     setIsUploading(true);
-    const result = await uploadImageToBlob(pendingImageFile);
+    const result = await uploadImageToBlob(croppedFile);
     setIsUploading(false);
     setPendingImageFile(null);
 

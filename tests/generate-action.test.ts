@@ -61,7 +61,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { generateCarousel } from "@/lib/actions/generate";
+import { generateCarousel, generateForEditor } from "@/lib/actions/generate";
 import {
   GenerateError,
   isGenerateError,
@@ -246,5 +246,69 @@ describe("generateCarousel — barreira de sessão (AC-1)", () => {
     requestGenerationMock.mockResolvedValue(goodGenerated());
     await generateCarousel({ intent: validIntent }).catch(() => {});
     expect(requireUserMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// =============================================================================
+// generateForEditor (ADR 0004) — mesma defesa em camadas, mas DEVOLVE o
+// resultado (uniao) em vez de persistir/redirecionar. O assistente do editor
+// aplica no carrossel aberto; erro vira `{ ok:false, code }` (sem throw).
+// =============================================================================
+describe("generateForEditor — devolve resultado ao editor (não persiste)", () => {
+  it("intenção válida => { ok:true } com title + slides, SEM persistir nem redirecionar", async () => {
+    requestGenerationMock.mockResolvedValue(goodGenerated());
+
+    const result = await generateForEditor({ intent: validIntent });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.title).toBe("Carrossel gerado");
+      expect(result.slides.map((s) => s.body)).toEqual([
+        "Primeiro slide.",
+        expect.stringContaining("Segundo slide."),
+      ]);
+      // Slide 2 sinalizou imagem: a dica textual entra no body (sem imageUrl).
+      expect(result.slides[1]?.body).toContain("[Sugestão: adicione uma imagem");
+    }
+    // NÃO cria carrossel novo (diferente de generateCarousel).
+    expect(createGeneratedCarouselMock).not.toHaveBeenCalled();
+    // A fronteira foi chamada com a intenção.
+    expect(requestGenerationMock).toHaveBeenCalledWith(validIntent);
+  });
+
+  it("intenção curta (<10) => { ok:false, INVALID_INPUT } SEM chamar a API", async () => {
+    const result = await generateForEditor({ intent: "curta" });
+    expect(result).toEqual({ ok: false, code: "INVALID_INPUT" });
+    expect(requestGenerationMock).not.toHaveBeenCalled();
+  });
+
+  it("chave ausente => { ok:false, NOT_CONFIGURED }", async () => {
+    requestGenerationMock.mockRejectedValue(new GenerateError("NOT_CONFIGURED"));
+    const result = await generateForEditor({ intent: validIntent });
+    expect(result).toEqual({ ok: false, code: "NOT_CONFIGURED" });
+  });
+
+  it("refusal/JSON inválido => { ok:false, GENERATION_FAILED }", async () => {
+    requestGenerationMock.mockRejectedValue(
+      new GenerateError("GENERATION_FAILED"),
+    );
+    const result = await generateForEditor({ intent: validIntent });
+    expect(result).toEqual({ ok: false, code: "GENERATION_FAILED" });
+  });
+
+  it("saída que sanitiza para 0 slides úteis => { ok:false, GENERATION_FAILED }", async () => {
+    requestGenerationMock.mockResolvedValue({
+      title: "Título ok",
+      slides: [{ body: "🚀", suggestImage: false }],
+    } as GeneratedCarousel);
+    const result = await generateForEditor({ intent: validIntent });
+    expect(result).toEqual({ ok: false, code: "GENERATION_FAILED" });
+  });
+
+  it("sem sessão, o redirect do requireUser é re-lançado (não vira união)", async () => {
+    requireUserMock.mockRejectedValue(new RedirectError("/login"));
+    const err = await generateForEditor({ intent: validIntent }).catch((e) => e);
+    expect(err).toBeInstanceOf(RedirectError);
+    expect(requestGenerationMock).not.toHaveBeenCalled();
   });
 });

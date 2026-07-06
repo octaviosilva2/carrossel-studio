@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useReducer, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Download, FileArchive, Trash2 } from "lucide-react";
+import { Check, Download, FileArchive, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
   editorReducer,
@@ -86,6 +93,26 @@ export function EditorClient({ initialState }: EditorClientProps) {
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Assistente de IA: recolhido por padrao (ADR 0004 revisada). Abre por botao no
+  // header como drawer sobreposto — nao ocupa mais uma coluna fixa.
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+
+  /**
+   * Aplica o carrossel gerado pela IA no editor (substitui titulo + slides) e
+   * fecha o painel. O autosave (debounce) persiste em seguida.
+   */
+  function handleApplyGenerated(result: {
+    title: string;
+    slides: { body: string }[];
+  }) {
+    dispatch({
+      type: "APPLY_GENERATED",
+      title: result.title,
+      slides: result.slides,
+    });
+    setIsAssistantOpen(false);
+  }
 
   // Estado do export (S4). captureData != null => o <ExportCapture> esta montado
   // (sob demanda, so durante um export). Concentra o custo (fetch/canvas) no
@@ -306,13 +333,24 @@ export function EditorClient({ initialState }: EditorClientProps) {
           )}
         </span>
 
+        {/* Assistente de IA: abre o drawer (não é mais coluna fixa). */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={() => setIsAssistantOpen(true)}
+        >
+          <Sparkles className="h-4 w-4" />
+          Assistente IA
+        </Button>
+
         <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
           <DialogTrigger asChild>
             <Button
               type="button"
               variant="destructive"
               size="sm"
-              className="ml-auto"
               disabled={!state.carouselId}
             >
               <Trash2 className="h-4 w-4" />
@@ -355,16 +393,12 @@ export function EditorClient({ initialState }: EditorClientProps) {
         <ExportCapture ref={captureRef} slides={captureData} />
       ) : null}
 
-      {/* Layout 3 colunas: assistente | slides manuais | preview. Empilha
-          abaixo de lg na ordem slides -> preview -> assistente. */}
+      {/* Layout 2 colunas (ADR 0004 revisada): edição | preview protagonista.
+          O assistente saiu da grade (virou drawer). Empilha abaixo de lg na
+          ordem natural: edição -> preview. */}
       <div className="flex flex-1 flex-col lg:h-[calc(100vh-3.5rem)] lg:flex-row lg:overflow-hidden">
-        {/* ESQUERDA: assistente de IA (mock, sempre visivel). */}
-        <div className="order-3 h-80 shrink-0 border-t border-border lg:order-1 lg:h-auto lg:w-72 lg:border-r lg:border-t-0">
-          <AssistantPanel />
-        </div>
-
-        {/* CENTRO: slides manuais (SlideNav + SlideEditor, logica inalterada). */}
-        <div className="order-1 min-w-0 flex-1 space-y-4 overflow-y-auto p-4 lg:order-2">
+        {/* ESQUERDA: edição (slides + slide selecionado). Enxuta, ~38%. */}
+        <div className="min-w-0 shrink-0 space-y-4 overflow-y-auto p-4 lg:w-[380px] lg:border-r lg:border-border">
           <SlideNav
             slides={state.slides}
             selectedSlideId={state.selectedSlideId}
@@ -373,33 +407,11 @@ export function EditorClient({ initialState }: EditorClientProps) {
           <SlideEditor slide={selectedSlide} dispatch={dispatch} />
         </div>
 
-        {/* DIREITA: preview (maior) + identidade + exportacao. */}
-        <div className="order-2 shrink-0 space-y-4 overflow-y-auto border-t border-border p-4 lg:order-3 lg:w-[460px] lg:border-l lg:border-t-0">
-          <ThemePreview
-            identity={state.identity}
-            theme={state.theme}
-            slides={state.slides}
-            slide={selectedSlide}
-            dispatch={dispatch}
-          />
-
-          <IdentityPanel identity={state.identity} dispatch={dispatch} />
-
-          {/* Feedback do export (aria-live). */}
-          <div aria-live="polite" className="min-h-[1.25rem]">
-            {exportState.status === "done" ? (
-              <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                Exportado.
-              </p>
-            ) : null}
-            {exportState.status === "error" ? (
-              <p role="alert" className="text-sm text-destructive">
-                {exportState.message}
-              </p>
-            ) : null}
-          </div>
-
-          <div className={cn("flex gap-2")}>
+        {/* DIREITA: preview protagonista. Ordem: baixar (topo) -> preview ->
+            identidade (abaixo). */}
+        <div className="min-w-0 flex-1 space-y-4 overflow-y-auto border-t border-border p-4 lg:border-t-0">
+          {/* Exportação ACIMA do preview. */}
+          <div className="flex gap-2">
             <Button
               type="button"
               className="flex-1 justify-center"
@@ -432,8 +444,56 @@ export function EditorClient({ initialState }: EditorClientProps) {
                 : "Este slide (PNG)"}
             </Button>
           </div>
+
+          {/* Feedback do export (aria-live). */}
+          <div aria-live="polite" className="min-h-[1.25rem]">
+            {exportState.status === "done" ? (
+              <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                Exportado.
+              </p>
+            ) : null}
+            {exportState.status === "error" ? (
+              <p role="alert" className="text-sm text-destructive">
+                {exportState.message}
+              </p>
+            ) : null}
+          </div>
+
+          {/* Preview protagonista. */}
+          <ThemePreview
+            identity={state.identity}
+            theme={state.theme}
+            slides={state.slides}
+            slide={selectedSlide}
+            dispatch={dispatch}
+          />
+
+          {/* Identidade ABAIXO do preview. */}
+          <IdentityPanel identity={state.identity} dispatch={dispatch} />
         </div>
       </div>
+
+      {/* Drawer do Assistente de IA — abre pelo botão do header. */}
+      <Sheet open={isAssistantOpen} onOpenChange={setIsAssistantOpen}>
+        <SheetContent
+          side="right"
+          className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+        >
+          <SheetHeader className="space-y-0 border-b border-border px-4 py-3 text-left">
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Assistente IA
+            </SheetTitle>
+            {/* Descrição só para leitores de tela (o banner visível vem no painel). */}
+            <SheetDescription className="sr-only">
+              Descreva o carrossel e a IA gera os slides aqui no editor.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1">
+            <AssistantPanel onApply={handleApplyGenerated} />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -457,6 +457,66 @@ describe("pureza do reducer", () => {
   });
 });
 
+// --- APPLY_GENERATED (aplica carrossel gerado pela IA) ----------------------
+
+describe("APPLY_GENERATED", () => {
+  it("substitui titulo e slides pelo resultado gerado", () => {
+    const prev = threeSlidesState();
+    const next = editorReducer(prev, {
+      type: "APPLY_GENERATED",
+      title: "Carrossel novo",
+      slides: [{ body: "gerado 1" }, { body: "gerado 2" }],
+    });
+    expect(next.title).toBe("Carrossel novo");
+    expect(next.slides.map((s) => s.body)).toEqual(["gerado 1", "gerado 2"]);
+    // Os ids antigos ("a","b","c") sumiram — slides sao novos.
+    expect(next.slides.map((s) => s.id)).not.toContain("a");
+  });
+
+  it("seleciona o primeiro slide gerado", () => {
+    const prev = threeSlidesState();
+    const next = editorReducer(prev, {
+      type: "APPLY_GENERATED",
+      title: "T",
+      slides: [{ body: "primeiro" }, { body: "segundo" }],
+    });
+    const first = next.slides[0];
+    expect(first).toBeDefined();
+    expect(next.selectedSlideId).toBe(first?.id);
+  });
+
+  it("cada slide gerado nasce sem imagem (imageUrl undefined)", () => {
+    const prev = threeSlidesState();
+    const next = editorReducer(prev, {
+      type: "APPLY_GENERATED",
+      title: "T",
+      slides: [{ body: "x" }],
+    });
+    expect(next.slides.every((s) => s.imageUrl === undefined)).toBe(true);
+  });
+
+  it("nao altera identity nem theme (so titulo e slides)", () => {
+    const prev = threeSlidesState();
+    const next = editorReducer(prev, {
+      type: "APPLY_GENERATED",
+      title: "T",
+      slides: [{ body: "x" }],
+    });
+    expect(next.identity).toBe(prev.identity);
+    expect(next.theme).toBe(prev.theme);
+  });
+
+  it("lista vazia e no-op (nunca deixa o editor sem slide)", () => {
+    const prev = threeSlidesState();
+    const next = editorReducer(prev, {
+      type: "APPLY_GENERATED",
+      title: "T",
+      slides: [],
+    });
+    expect(next).toBe(prev);
+  });
+});
+
 // --- toSlideData (adaptador) ------------------------------------------------
 
 describe("toSlideData", () => {

@@ -68,3 +68,24 @@ export class GenerateError extends Error {
 export function isGenerateError(err: unknown): err is GenerateError {
   return err instanceof GenerateError;
 }
+
+// --- Resultado da geracao para o EDITOR (ADR 0004) ---------------------------
+
+/**
+ * Slide gerado a devolver ao editor: so o `body` (a geracao nunca traz imagem).
+ * O client cria o EditorSlide (id/imageUrl) via o reducer (APPLY_GENERATED).
+ */
+export interface GeneratedEditorSlide {
+  body: string;
+}
+
+/**
+ * Resultado de `generateForEditor` — uniao discriminada (o assistente do editor
+ * trata SEM throw, mostrando a mensagem no chat). Diferente de `generateCarousel`
+ * (que persiste e redireciona), aqui NAO se cria carrossel novo: o resultado e
+ * aplicado no carrossel ja aberto. Erro carrega so o `code` estavel — a mensagem
+ * pt-BR e resolvida no client (nunca vaza detalhe tecnico).
+ */
+export type GenerateForEditorResult =
+  | { ok: true; title: string; slides: GeneratedEditorSlide[] }
+  | { ok: false; code: GenerateErrorCode };

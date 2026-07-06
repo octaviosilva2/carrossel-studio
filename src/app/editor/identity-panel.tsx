@@ -63,14 +63,14 @@ export function IdentityPanel({ identity, dispatch }: IdentityPanelProps) {
     e.target.value = "";
   }
 
-  /** Confirmado no modal de ajuste: segue com o upload REAL do arquivo original. */
-  async function handleCropConfirm() {
+  /** Confirmado no modal de ajuste: sobe o arquivo JA RECORTADO (crop real). */
+  async function handleCropConfirm(croppedFile: File) {
     if (!pendingAvatarFile) return;
 
     // Envia ao Vercel Blob (upload real, S3). Em sucesso grava a URL https; em
     // falha mostra erro inline e NAO altera o estado (avatar anterior permanece).
     setIsUploading(true);
-    const result = await uploadImageToBlob(pendingAvatarFile);
+    const result = await uploadImageToBlob(croppedFile);
     setIsUploading(false);
     setPendingAvatarFile(null);
 

@@ -8,6 +8,11 @@ vi.mock("@/lib/actions/carousels", () => ({
   saveCarousel: vi.fn(),
   deleteCarousel: vi.fn(),
 }));
+// O AssistantPanel (drawer) importa generateForEditor — mock para nao arrastar
+// next-auth/@/db ao jsdom (mesma razao dos demais mocks de fronteira).
+vi.mock("@/lib/actions/generate", () => ({
+  generateForEditor: vi.fn(),
+}));
 vi.mock("@/lib/blob-upload", () => ({
   uploadImageToBlob: vi.fn(),
 }));

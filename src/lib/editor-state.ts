@@ -68,7 +68,11 @@ export type EditorAction =
   | { type: "SET_SLIDE_IMAGE"; id: string; imageUrl: string }
   | { type: "REMOVE_SLIDE_IMAGE"; id: string }
   // Aditivo (S3): edita o titulo do carrossel. Nao altera as actions da S2.
-  | { type: "SET_TITLE"; title: string };
+  | { type: "SET_TITLE"; title: string }
+  // Aditivo (ADR 0004): aplica um carrossel gerado pela IA no editor atual —
+  // SUBSTITUI titulo + slides (geracao, nao edicao incremental). Cada slide vira
+  // um EditorSlide novo (id gerado aqui); o primeiro passa a ser o selecionado.
+  | { type: "APPLY_GENERATED"; title: string; slides: { body: string }[] };
 
 // --- Placeholder de avatar (default) -----------------------------------------
 
@@ -266,6 +270,30 @@ export function editorReducer(
     case "SET_TITLE": {
       // Aditivo (S3): so troca o titulo; nao toca identidade/slides/tema.
       return { ...state, title: action.title };
+    }
+
+    case "APPLY_GENERATED": {
+      // Substitui os slides do carrossel atual pelo resultado da IA. Guarda:
+      // lista vazia nao deveria chegar (a action garante >=1 slide), mas se
+      // chegar e no-op — nunca deixa o editor sem slide por engano.
+      if (action.slides.length === 0) return state;
+
+      // Cada slide gerado vira um EditorSlide novo (id estavel para React/reorder).
+      // A geracao nunca traz imagem; imageUrl fica undefined (corpo 52 no preview).
+      const newSlides: EditorSlide[] = action.slides.map((slide) => ({
+        id: crypto.randomUUID(),
+        body: slide.body,
+        imageUrl: undefined,
+      }));
+      // Seleciona o primeiro slide gerado. `first` sempre existe apos o guard,
+      // mas narramos o acesso (noUncheckedIndexedAccess).
+      const [first] = newSlides;
+      return {
+        ...state,
+        title: action.title,
+        slides: newSlides,
+        selectedSlideId: first ? first.id : null,
+      };
     }
 
     default: {
