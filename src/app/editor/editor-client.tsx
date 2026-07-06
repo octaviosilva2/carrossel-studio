@@ -472,7 +472,8 @@ export function EditorClient({ initialState }: EditorClientProps) {
                 dispatch={dispatch}
               />
             </div>
-            <div className="min-w-0 flex-1">
+            {/* Identidade com largura contida (form) — não estica com o espaço. */}
+            <div className="w-full xl:w-[340px] xl:shrink-0">
               <IdentityPanel identity={state.identity} dispatch={dispatch} />
             </div>
           </div>
