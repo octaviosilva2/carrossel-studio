@@ -350,16 +350,16 @@ export function EditorClient({ initialState }: EditorClientProps) {
   return (
     <div className="flex min-h-full flex-col">
       {/* Cabecalho: titulo editavel + status do autosave + excluir. */}
-      <header className="sticky top-14 z-10 flex h-14 flex-wrap items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6 lg:top-0 lg:px-8">
+      <header className="sticky top-14 z-10 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6 lg:top-0 lg:px-8">
         <Input
           value={title}
           placeholder={DEFAULT_CAROUSEL_TITLE}
           aria-label="Título do carrossel"
           onChange={(e) => dispatch({ type: "SET_TITLE", title: e.target.value })}
-          className="h-8 max-w-xs border-transparent bg-transparent px-1.5 text-sm font-semibold shadow-none hover:border-input focus-visible:border-input"
+          className="h-8 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-sm font-semibold shadow-none hover:border-input focus-visible:border-input lg:max-w-xs lg:flex-none"
         />
 
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
           {saveState.status === "saving" || isPending ? (
             <>
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
