@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState, useReducer, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Download, FileArchive, Sparkles, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Download,
+  FileArchive,
+  MoreVertical,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +27,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -115,6 +128,17 @@ export function EditorClient({ initialState }: EditorClientProps) {
   // Dica que aponta o botao "Assistente IA". Comeca visivel a cada entrada no editor
   // (novo ou ja gerado) e some ao dispensar (X) ou ao abrir o assistente.
   const [showAssistantHint, setShowAssistantHint] = useState(true);
+
+  // Lado do drawer do Assistente: em mobile/tablet (<lg) abre de baixo, em
+  // meia altura; em desktop (>=lg) mantem o drawer lateral direito de sempre.
+  const [assistantSide, setAssistantSide] = useState<"bottom" | "right">("right");
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const update = () => setAssistantSide(query.matches ? "right" : "bottom");
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   /**
    * Aplica no editor o carrossel PROPOSTO pela IA no chat (substitui titulo +
@@ -353,8 +377,10 @@ export function EditorClient({ initialState }: EditorClientProps) {
           )}
         </span>
 
-        {/* Assistente de IA: abre o drawer. A dica aponta o botão e é dispensável. */}
-        <div className="relative ml-auto">
+        {/* Desktop (>=lg): Assistente IA + Excluir lado a lado no header, como sempre.
+            Em mobile/tablet o Assistente IA fica abaixo de "Adicionar slide" (na coluna
+            de edição) e o Excluir vai para o menu de 3 pontinhos abaixo. */}
+        <div className="relative ml-auto hidden lg:block">
           <Button
             type="button"
             variant="outline"
@@ -388,18 +414,40 @@ export function EditorClient({ initialState }: EditorClientProps) {
           ) : null}
         </div>
 
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="hidden lg:inline-flex"
+          disabled={!state.carouselId}
+          onClick={() => setIsDeleteOpen(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+          Excluir
+        </Button>
+
+        {/* Mobile/tablet (<lg): menu de 3 pontinhos com a ação de excluir. */}
+        <div className="ml-auto lg:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" aria-label="Mais opções">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={!state.carouselId}
+                onSelect={() => setIsDeleteOpen(true)}
+                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
         <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-          <DialogTrigger asChild>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={!state.carouselId}
-            >
-              <Trash2 className="h-4 w-4" />
-              Excluir
-            </Button>
-          </DialogTrigger>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <DialogTitle>Excluir carrossel</DialogTitle>
@@ -447,6 +495,19 @@ export function EditorClient({ initialState }: EditorClientProps) {
             selectedSlideId={state.selectedSlideId}
             dispatch={dispatch}
           />
+
+          {/* Mobile/tablet (<lg): Assistente IA logo abaixo de "Adicionar slide". */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full justify-center lg:hidden"
+            onClick={openAssistant}
+          >
+            <Sparkles className="h-4 w-4" />
+            Assistente IA
+          </Button>
+
           <SlideEditor slide={selectedSlide} dispatch={dispatch} />
         </div>
 
@@ -526,11 +587,17 @@ export function EditorClient({ initialState }: EditorClientProps) {
         </div>
       </div>
 
-      {/* Drawer do Assistente de IA — abre pelo botão do header. */}
+      {/* Drawer do Assistente de IA. Em mobile/tablet abre de baixo, em meia
+          altura; em desktop mantem o drawer lateral direito de sempre. */}
       <Sheet open={isAssistantOpen} onOpenChange={setIsAssistantOpen}>
         <SheetContent
-          side="right"
-          className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+          side={assistantSide}
+          className={cn(
+            "flex flex-col gap-0 p-0",
+            assistantSide === "bottom"
+              ? "h-[50vh] rounded-t-xl"
+              : "w-full sm:max-w-md",
+          )}
         >
           <SheetHeader className="space-y-0 border-b border-border px-4 py-3 text-left">
             <SheetTitle className="flex items-center gap-2 text-base">

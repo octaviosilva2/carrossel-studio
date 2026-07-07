@@ -11,3 +11,21 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
 }
+
+// jsdom nao implementa matchMedia; o AppShell/editor usam para detectar o
+// breakpoint lg (desktop vs mobile/tablet). Stub minimo: sempre "nao bate"
+// (matches: false), suficiente para os testes de fumaca nao quebrarem.
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener() {},
+    removeListener() {},
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {
+      return false;
+    },
+  })) as unknown as typeof window.matchMedia;
+}

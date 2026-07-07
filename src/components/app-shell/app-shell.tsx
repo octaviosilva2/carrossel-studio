@@ -4,19 +4,26 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   History,
   LayoutGrid,
   LogOut,
-  Menu,
   Settings,
   ShieldCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/lib/actions/auth";
 import { Logo } from "./logo";
@@ -35,6 +42,13 @@ const MAIN_NAV: NavItemDef[] = [
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
+// Barra inferior mobile/tablet (estilo Instagram): so os destinos primarios.
+// "Configuracoes" fica no menu de conta (avatar, topo direito) — nao aqui.
+const BOTTOM_NAV: NavItemDef[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/carousels", label: "Histórico", icon: History },
+];
+
 interface AppShellProps {
   children: ReactNode;
   userName: string;
@@ -44,13 +58,13 @@ interface AppShellProps {
 
 /**
  * Casca visual compartilhada por toda pagina logada (exceto /login e
- * /onboarding): sidebar fixa colapsavel em telas lg+, vira Sheet (drawer) em
- * telas menores. Tema do app e sempre claro (sem opcao de troca).
+ * /onboarding): sidebar fixa colapsavel em telas lg+; em telas menores vira
+ * topbar (logo + menu de conta) + barra inferior de navegacao (estilo
+ * Instagram). Tema do app e sempre claro (sem opcao de troca).
  */
 export function AppShell({ children, userName, userEmail, isAdmin }: AppShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   // Le preferencia persistida so no cliente (evita mismatch de hidratacao SSR).
   useEffect(() => {
@@ -127,67 +141,103 @@ export function AppShell({ children, userName, userEmail, isAdmin }: AppShellPro
         />
       </aside>
 
-      {/* Drawer (mobile/tablet, <lg) */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="flex w-64 flex-col p-0">
-          <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
-          <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-            <Logo className="h-6 w-6 shrink-0 text-primary" />
-            <span className="text-sm font-semibold tracking-tight">
-              Carrossel Studio
-            </span>
-          </div>
-          <nav className="flex-1 space-y-0.5 overflow-y-auto p-2.5">
-            <NavList
-              pathname={pathname}
-              isAdmin={isAdmin}
-              collapsed={false}
-              onNavigate={() => setMobileOpen(false)}
-            />
-          </nav>
-          <SidebarFooter
-            userName={userName}
-            userEmail={userEmail}
-            initial={initial}
-            collapsed={false}
-            onNavigate={() => setMobileOpen(false)}
-          />
-        </SheetContent>
-      </Sheet>
-
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar mobile/tablet: hamburguer + logo (some em telas >=lg) */}
-        <div className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur lg:hidden">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="-ml-1.5 h-8 w-8"
-            onClick={() => setMobileOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          <Logo className="h-6 w-6 text-primary" />
-          <span className="text-sm font-semibold">Carrossel Studio</span>
+        {/* Topbar mobile/tablet: logo a esquerda, conta a direita (some em telas >=lg) */}
+        <div className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-border bg-background/90 px-4 backdrop-blur lg:hidden">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <Logo className="h-6 w-6 text-primary" />
+            <span className="text-sm font-semibold">Carrossel Studio</span>
+          </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-1.5 transition-colors hover:bg-accent"
+                aria-label="Menu da conta"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                  {initial}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="font-normal">
+                <span className="block truncate text-sm font-medium text-foreground">
+                  {userName}
+                </span>
+                <span className="block truncate text-xs font-normal text-muted-foreground">
+                  {userEmail}
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <Settings className="h-4 w-4" />
+                  Configurações
+                </Link>
+              </DropdownMenuItem>
+              {isAdmin ? (
+                <DropdownMenuItem asChild>
+                  <Link href="/admin">
+                    <ShieldCheck className="h-4 w-4" />
+                    Admin
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuSeparator />
+              <form action={signOutAction}>
+                <button
+                  type="submit"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent focus:bg-accent"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sair
+                </button>
+              </form>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1 pb-14 lg:pb-0">{children}</div>
+
+        {/* Barra inferior mobile/tablet, estilo Instagram: Dashboard + Historico
+            (some em telas >=lg, onde a sidebar fixa ja cobre a navegacao). */}
+        <nav className="fixed inset-x-0 bottom-0 z-20 flex h-14 items-stretch border-t border-border bg-background/95 backdrop-blur lg:hidden">
+          {BOTTOM_NAV.map((item) => {
+            const Icon = item.icon;
+            const active =
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] transition-colors",
+                  active ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );
 }
 
-// Lista de itens de navegacao — compartilhada entre a sidebar fixa e o drawer.
+// Lista de itens de navegacao da sidebar fixa (desktop/laptop, >=lg).
 function NavList({
   pathname,
   isAdmin,
   collapsed,
-  onNavigate,
 }: {
   pathname: string;
   isAdmin: boolean;
   collapsed: boolean;
-  onNavigate?: () => void;
 }) {
   return (
     <>
@@ -199,7 +249,6 @@ function NavList({
           <Link
             key={item.href}
             href={item.href}
-            onClick={onNavigate}
             className={cn(
               "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
               collapsed && "justify-center",
@@ -223,7 +272,6 @@ function NavList({
           ) : null}
           <Link
             href="/admin"
-            onClick={onNavigate}
             className={cn(
               "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
               collapsed && "justify-center",
@@ -249,26 +297,22 @@ function NavList({
   );
 }
 
-// Rodape da sidebar: usuario logado + logout. Compartilhado entre a
-// sidebar fixa e o drawer mobile (so muda `collapsed`/`onNavigate`).
+// Rodape da sidebar fixa (desktop/laptop, >=lg): usuario logado + logout.
 function SidebarFooter({
   userName,
   userEmail,
   initial,
   collapsed,
-  onNavigate,
 }: {
   userName: string;
   userEmail: string;
   initial: string;
   collapsed: boolean;
-  onNavigate?: () => void;
 }) {
   return (
     <div className="space-y-2 border-t border-border p-2.5">
       <Link
         href="/settings?tab=account"
-        onClick={onNavigate}
         className={cn(
           "flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent",
           collapsed && "justify-center",
