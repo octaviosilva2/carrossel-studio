@@ -129,12 +129,13 @@ export function EditorClient({ initialState }: EditorClientProps) {
   // (novo ou ja gerado) e some ao dispensar (X) ou ao abrir o assistente.
   const [showAssistantHint, setShowAssistantHint] = useState(true);
 
-  // Lado do drawer do Assistente: em mobile/tablet (<lg) abre de baixo, em
-  // meia altura; em desktop (>=lg) mantem o drawer lateral direito de sempre.
-  const [assistantSide, setAssistantSide] = useState<"bottom" | "right">("right");
+  // Lado do drawer do Assistente: em mobile/tablet (<lg) abre do topo, em meia
+  // altura — do topo (nao de baixo) para o teclado virtual nao tampar o campo
+  // de mensagem; em desktop (>=lg) mantem o drawer lateral direito de sempre.
+  const [assistantSide, setAssistantSide] = useState<"top" | "right">("right");
   useEffect(() => {
     const query = window.matchMedia("(min-width: 1024px)");
-    const update = () => setAssistantSide(query.matches ? "right" : "bottom");
+    const update = () => setAssistantSide(query.matches ? "right" : "top");
     update();
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
@@ -356,7 +357,7 @@ export function EditorClient({ initialState }: EditorClientProps) {
           placeholder={DEFAULT_CAROUSEL_TITLE}
           aria-label="Título do carrossel"
           onChange={(e) => dispatch({ type: "SET_TITLE", title: e.target.value })}
-          className="h-8 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-sm font-semibold shadow-none hover:border-input focus-visible:border-input lg:max-w-xs lg:flex-none"
+          className="h-8 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-base font-semibold shadow-none hover:border-input focus-visible:border-input md:text-sm lg:max-w-xs lg:flex-none"
         />
 
         <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
@@ -392,25 +393,10 @@ export function EditorClient({ initialState }: EditorClientProps) {
           </Button>
 
           {showAssistantHint ? (
-            <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-lg border border-border bg-card p-3 text-left shadow-md">
-              {/* Setinha apontando o botão. */}
-              <span className="absolute -top-1.5 right-6 h-3 w-3 rotate-45 border-l border-t border-border bg-card" />
-              <button
-                type="button"
-                aria-label="Dispensar dica"
-                onClick={() => setShowAssistantHint(false)}
-                className="absolute right-1.5 top-1.5 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-              <p className="flex items-center gap-1.5 text-sm font-semibold">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                Crie com IA
-              </p>
-              <p className="mt-0.5 pr-4 text-xs text-muted-foreground">
-                Abra o Assistente IA para gerar ou ajustar seu carrossel por chat.
-              </p>
-            </div>
+            <AssistantHintCard
+              align="right"
+              onDismiss={() => setShowAssistantHint(false)}
+            />
           ) : null}
         </div>
 
@@ -496,17 +482,27 @@ export function EditorClient({ initialState }: EditorClientProps) {
             dispatch={dispatch}
           />
 
-          {/* Mobile/tablet (<lg): Assistente IA logo abaixo de "Adicionar slide". */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full justify-center lg:hidden"
-            onClick={openAssistant}
-          >
-            <Sparkles className="h-4 w-4" />
-            Assistente IA
-          </Button>
+          {/* Mobile/tablet (<lg): Assistente IA logo abaixo de "Adicionar slide".
+              Mesma dica dispensavel do botao desktop. */}
+          <div className="relative lg:hidden">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-center"
+              onClick={openAssistant}
+            >
+              <Sparkles className="h-4 w-4" />
+              Assistente IA
+            </Button>
+
+            {showAssistantHint ? (
+              <AssistantHintCard
+                align="left"
+                onDismiss={() => setShowAssistantHint(false)}
+              />
+            ) : null}
+          </div>
 
           <SlideEditor slide={selectedSlide} dispatch={dispatch} />
         </div>
@@ -587,15 +583,17 @@ export function EditorClient({ initialState }: EditorClientProps) {
         </div>
       </div>
 
-      {/* Drawer do Assistente de IA. Em mobile/tablet abre de baixo, em meia
-          altura; em desktop mantem o drawer lateral direito de sempre. */}
+      {/* Drawer do Assistente de IA. Em mobile/tablet abre do topo, em meia
+          altura (o teclado virtual cobre a parte de baixo da tela — abrindo do
+          topo o campo de mensagem nunca fica atras dele); em desktop mantem o
+          drawer lateral direito de sempre. */}
       <Sheet open={isAssistantOpen} onOpenChange={setIsAssistantOpen}>
         <SheetContent
           side={assistantSide}
           className={cn(
             "flex flex-col gap-0 p-0",
-            assistantSide === "bottom"
-              ? "h-[50vh] rounded-t-xl"
+            assistantSide === "top"
+              ? "h-[50vh] rounded-b-xl"
               : "w-full sm:max-w-md",
           )}
         >
@@ -619,6 +617,51 @@ export function EditorClient({ initialState }: EditorClientProps) {
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+/**
+ * Balao de dica dispensavel que aponta o botao "Assistente IA" — reusado no
+ * botao do header (desktop) e no botao abaixo de "Adicionar slide" (mobile),
+ * só mudando o lado da setinha/ancoragem.
+ */
+function AssistantHintCard({
+  align,
+  onDismiss,
+}: {
+  align: "left" | "right";
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "absolute top-full z-30 mt-2 rounded-lg border border-border bg-card p-3 text-left shadow-md",
+        align === "right" ? "right-0 w-56" : "left-0 right-0",
+      )}
+    >
+      {/* Setinha apontando o botão. */}
+      <span
+        className={cn(
+          "absolute -top-1.5 h-3 w-3 rotate-45 border-l border-t border-border bg-card",
+          align === "right" ? "right-6" : "left-6",
+        )}
+      />
+      <button
+        type="button"
+        aria-label="Dispensar dica"
+        onClick={onDismiss}
+        className="absolute right-1.5 top-1.5 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        <Sparkles className="h-3.5 w-3.5 text-primary" />
+        Crie com IA
+      </p>
+      <p className="mt-0.5 pr-4 text-xs text-muted-foreground">
+        Abra o Assistente IA para gerar ou ajustar seu carrossel por chat.
+      </p>
     </div>
   );
 }

@@ -9,8 +9,12 @@
 
 import { headers } from "next/headers";
 import { AuthError } from "next-auth";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { signIn, signOut } from "@/auth";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { getDefaultClient } from "@/lib/client-repo";
 import {
   countRecentFailures,
   recordFailure,
@@ -21,6 +25,31 @@ import {
   parseClientIp,
   windowStart,
 } from "@/lib/rate-limit";
+
+/**
+ * Decide o destino pos-login: "/onboarding" se o client do dono ainda nao
+ * concluiu o onboarding, senao "/dashboard". So afeta o destino em caso de
+ * SUCESSO do login (redirectTo nunca e usado em falha) — nao vaza nada sobre
+ * a conta a quem ainda nao provou a senha. Mesma busca por e-mail (RAW, sem
+ * normalizar) que o authorize() faz, para garantir que aponta pro mesmo user.
+ * Falha na consulta nunca trava o login — cai no destino padrao.
+ */
+async function resolvePostLoginDestination(rawEmail: string): Promise<string> {
+  try {
+    const found = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, rawEmail))
+      .limit(1);
+    const userId = found[0]?.id;
+    if (!userId) return "/dashboard";
+
+    const client = await getDefaultClient(userId);
+    return client.onboardingCompletedAt === null ? "/onboarding" : "/dashboard";
+  } catch {
+    return "/dashboard";
+  }
+}
 
 // Borda: credenciais vindas do form.
 const signInSchema = z.object({
@@ -112,12 +141,14 @@ export async function signInAction(
   }
 
   // 4) Tenta autenticar. Em sucesso, signIn redireciona (lanca) e o reset do e-mail
-  // acontece no authorize (src/auth.ts).
+  // acontece no authorize (src/auth.ts). O destino muda pra /onboarding quando o
+  // client do dono ainda nao concluiu o onboarding (primeiro login).
+  const destination = await resolvePostLoginDestination(parsed.data.email);
   try {
     await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
-      redirectTo: "/dashboard",
+      redirectTo: destination,
     });
     // Inatingivel em sucesso (signIn redireciona). Mantido por exaustividade.
     return { error: "" };

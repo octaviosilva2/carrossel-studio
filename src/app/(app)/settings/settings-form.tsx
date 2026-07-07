@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
@@ -355,9 +356,8 @@ export function SettingsForm({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="current-password">Senha atual</Label>
-                  <Input
+                  <PasswordInput
                     id="current-password"
-                    type="password"
                     autoComplete="current-password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -366,9 +366,8 @@ export function SettingsForm({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="new-password">Nova senha</Label>
-                  <Input
+                  <PasswordInput
                     id="new-password"
-                    type="password"
                     autoComplete="new-password"
                     minLength={8}
                     value={newPassword}

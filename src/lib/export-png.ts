@@ -23,16 +23,30 @@ export interface ExportResult {
   height: number;
 }
 
+// Aguarda toda <img> dentro do no terminar de DECODIFICAR antes de rasterizar.
+// Sem isso ha uma corrida entre o toPng() e o decode assincrono da imagem (o
+// avatar, em especial, e uma data-URL base64 grande) — em celulares, mais lentos
+// pra decodificar, a corrida se perde com frequencia e o avatar sai em branco no
+// PNG exportado (o preview na tela nunca mostra esse bug, so a captura).
+async function waitForImagesDecoded(node: HTMLElement): Promise<void> {
+  const images = Array.from(node.querySelectorAll("img"));
+  await Promise.all(
+    images.map((img) => (img.decode ? img.decode().catch(() => undefined) : undefined)),
+  );
+}
+
 /**
  * Captura o no do slide (que deve estar em 1080x1350 reais) e devolve o PNG.
- * Aguarda as fontes ficarem prontas antes de capturar, senao o canvas cai em
- * fallback e quebra a fidelidade ao modelo.
+ * Aguarda as fontes E as imagens ficarem prontas antes de capturar, senao o
+ * canvas cai em fallback (ou sai com imagem em branco) e quebra a fidelidade
+ * ao modelo.
  */
 export async function renderSlideToPng(node: HTMLElement): Promise<ExportResult> {
   // Garante que as fontes (Segoe UI / fallback) estao carregadas antes de rasterizar.
   if (typeof document !== "undefined" && document.fonts?.ready) {
     await document.fonts.ready;
   }
+  await waitForImagesDecoded(node);
 
   const dataUrl = await toPng(node, {
     width: CANVAS_W,
@@ -46,15 +60,15 @@ export async function renderSlideToPng(node: HTMLElement): Promise<ExportResult>
 }
 
 /**
- * Renderiza e dispara o download do PNG no browser. Retorna o resultado para
- * quem quiser inspecionar (ex.: mostrar confirmacao de dimensao).
+ * Renderiza e compartilha/baixa o PNG (ver `shareOrDownloadBlob`). Retorna o
+ * resultado para quem quiser inspecionar (ex.: mostrar confirmacao de dimensao).
  */
 export async function exportSlideToPng(
   node: HTMLElement,
   fileName: string
 ): Promise<ExportResult> {
   const result = await renderSlideToPng(node);
-  triggerDownload(result.dataUrl, fileName);
+  await shareOrDownloadBlob(result.blob, fileName.endsWith(".png") ? fileName : `${fileName}.png`);
   return result;
 }
 
@@ -64,14 +78,32 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return response.blob();
 }
 
-// Dispara o download via <a download> temporario.
-function triggerDownload(dataUrl: string, fileName: string): void {
-  const link = document.createElement("a");
-  link.href = dataUrl;
-  link.download = fileName.endsWith(".png") ? fileName : `${fileName}.png`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+/**
+ * Compartilha o arquivo pelo share sheet nativo quando suportado (mobile: e o
+ * caminho que deixa "Salvar imagem"/"Salvar na galeria" nativos do SO, em vez
+ * de so cair na pasta Downloads do navegador sem confirmacao visual); senao cai
+ * no download tradicional (<a download>, comportamento de sempre no desktop).
+ * Cancelamento explicito do share (AbortError) NAO cai no fallback — o usuario
+ * so fechou o share sheet, nao pediu pra baixar de outro jeito.
+ */
+export async function shareOrDownloadBlob(blob: Blob, fileName: string): Promise<void> {
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    const file = new File([blob], fileName, { type: blob.type });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        return;
+      } catch (err) {
+        // Checa `.name` direto (nao `instanceof Error`): o AbortError do share e
+        // um DOMException, e em alguns runtimes (jsdom incluso) ele nao encadeia
+        // o prototype ate Error — `.name` e o jeito confiavel de identificar.
+        const name = err && typeof err === "object" ? (err as { name?: unknown }).name : undefined;
+        if (name === "AbortError") return;
+        // Outro erro do share (raro): cai pro download tradicional abaixo.
+      }
+    }
+  }
+  triggerBlobDownload(blob, fileName);
 }
 
 // ===========================================================================

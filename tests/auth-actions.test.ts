@@ -41,6 +41,31 @@ const { headersMock } = vi.hoisted(() => ({
   headersMock: vi.fn(async () => ({ get: (_name: string) => null })),
 }));
 
+// Fronteira do banco (I/O em Postgres) usada por resolvePostLoginDestination:
+// db.select({id}).from(users).where(...).limit(1) — builder encadeavel generico,
+// mesmo padrao de tests/settings-action.test.ts. Por padrao acha um user e um
+// client com onboarding CONCLUIDO (preserva o destino "/dashboard" dos testes
+// existentes); cada teste ajusta o que precisar.
+const mockState = vi.hoisted(() => {
+  const state = { userRows: [{ id: "user-1" }] as { id: string }[] };
+  const builder: Record<string, unknown> = {};
+  const chain = () => () => builder;
+  for (const method of ["select", "from", "where", "limit"]) {
+    builder[method] = chain();
+  }
+  builder.then = (resolve: (v: unknown) => void) => resolve(state.userRows);
+  const db = { select: () => builder };
+  return { state, db };
+});
+vi.mock("@/db", () => ({ db: mockState.db }));
+
+const { getDefaultClientMock } = vi.hoisted(() => ({
+  getDefaultClientMock: vi.fn(),
+}));
+vi.mock("@/lib/client-repo", () => ({
+  getDefaultClient: (ownerId: string) => getDefaultClientMock(ownerId),
+}));
+
 vi.mock("next-auth", () => ({ AuthError: AuthErrorMock }));
 vi.mock("@/auth", () => ({
   signIn: (...args: unknown[]) => signInMock(...args),
@@ -79,6 +104,10 @@ beforeEach(() => {
   recordFailureMock.mockResolvedValue(undefined);
   headersMock.mockReset();
   headersMock.mockResolvedValue({ get: (_name: string) => null });
+  // Default: acha o user e o onboarding ja esta concluido => destino "/dashboard".
+  mockState.state.userRows = [{ id: "user-1" }];
+  getDefaultClientMock.mockReset();
+  getDefaultClientMock.mockResolvedValue({ onboardingCompletedAt: new Date() });
 });
 
 describe("signInAction — validação de borda (AC 22)", () => {
@@ -136,6 +165,44 @@ describe("signInAction — falha fechado com mensagem genérica (AC 2)", () => {
     await expect(
       signInAction(undefined, loginForm("admin@example.com", "senha-ok")),
     ).rejects.toBe(redirectError);
+  });
+});
+
+describe("signInAction — destino pós-login (onboarding)", () => {
+  it("onboarding ainda não concluído (onboardingCompletedAt null) => redirectTo /onboarding", async () => {
+    getDefaultClientMock.mockResolvedValue({ onboardingCompletedAt: null });
+    signInMock.mockResolvedValue(undefined);
+
+    await signInAction(undefined, loginForm("novo@example.com", "senha-ok"));
+
+    expect(signInMock).toHaveBeenCalledWith(
+      "credentials",
+      expect.objectContaining({ redirectTo: "/onboarding" }),
+    );
+  });
+
+  it("usuário não encontrado na pré-checagem => cai no destino padrão /dashboard (não trava o login)", async () => {
+    mockState.state.userRows = [];
+    signInMock.mockResolvedValue(undefined);
+
+    await signInAction(undefined, loginForm("inexistente@example.com", "x"));
+
+    expect(signInMock).toHaveBeenCalledWith(
+      "credentials",
+      expect.objectContaining({ redirectTo: "/dashboard" }),
+    );
+  });
+
+  it("falha na consulta de destino não trava o login => cai no destino padrão /dashboard", async () => {
+    getDefaultClientMock.mockRejectedValue(new Error("Postgres indisponível"));
+    signInMock.mockResolvedValue(undefined);
+
+    await signInAction(undefined, loginForm("admin@example.com", "senha-ok"));
+
+    expect(signInMock).toHaveBeenCalledWith(
+      "credentials",
+      expect.objectContaining({ redirectTo: "/dashboard" }),
+    );
   });
 });
 

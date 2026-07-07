@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { auth } from "@/auth";
+import { getSessionUser } from "@/lib/auth-guard";
 import { Logo } from "@/components/app-shell/logo";
 import { LoginForm } from "./login-form";
 
@@ -8,19 +8,14 @@ import { LoginForm } from "./login-form";
 export const dynamic = "force-dynamic";
 
 /**
- * Pagina de login (Server Component, redesign). Se ja ha sessao, redireciona
- * para o Dashboard (nova home pos-login). Caso contrario, renderiza o
- * formulario (Client) que chama a server action signInAction — logica de auth
- * inalterada. Nao ha signup publico (conta criada via seed/admin).
- *
- * TODO(integração pós-merge): a action `signInAction` (src/lib/actions/auth.ts)
- * ainda redireciona para "/carousels" apos login bem-sucedido — fora do escopo
- * desta sessao de frontend (arquivo de actions). Trocar para "/dashboard" la
- * quando o backend mergear, para o pos-login bater com esta pagina.
+ * Pagina de login (Server Component, redesign). Se ja ha sessao VALIDA (o
+ * usuario ainda existe no banco — getSessionUser, nao auth() cru), redireciona
+ * para o Dashboard. Caso contrario, renderiza o formulario (Client) que chama a
+ * server action signInAction. Nao ha signup publico (conta criada via seed/admin).
  */
 export default async function LoginPage() {
-  const session = await auth();
-  if (session?.user?.id) {
+  const user = await getSessionUser();
+  if (user) {
     redirect("/dashboard");
   }
 
