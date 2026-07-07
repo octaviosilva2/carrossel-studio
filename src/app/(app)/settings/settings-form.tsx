@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { Trash2, TriangleAlert, Upload } from "lucide-react";
+import { Check, Trash2, TriangleAlert, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -27,11 +27,25 @@ interface SettingsFormProps {
   initialTab: "identity" | "account";
   /** null = onboarding ainda nao concluido (client.onboardingCompletedAt no banco). */
   onboardingCompletedAt: string | null;
+  /** null = senha provisoria nunca foi trocada (users.passwordChangedAt no banco). */
+  initialPasswordChangedAt: string | null;
 }
 
 // Estado do botao Salvar (mesma linguagem visual da S3/S5).
 type SaveState = "idle" | "saving" | "saved" | "error";
 type PasswordState = "idle" | "saving" | "saved" | "error";
+
+/** Formata ISO -> "DD/MM/AAAA HH:mm" (pt-BR) pra exibir a ultima troca de senha. */
+function formatPasswordChangedAt(iso: string): string {
+  const date = new Date(iso);
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
 
 /**
  * Form de Configurações com abas Identidade/Conta (redesign). Identidade
@@ -43,6 +57,7 @@ export function SettingsForm({
   userEmail,
   initialTab,
   onboardingCompletedAt,
+  initialPasswordChangedAt,
 }: SettingsFormProps) {
   const [tab, setTab] = useState<"identity" | "account">(initialTab);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -66,6 +81,7 @@ export function SettingsForm({
   const [newPassword, setNewPassword] = useState("");
   const [passwordState, setPasswordState] = useState<PasswordState>("idle");
   const [passwordError, setPasswordError] = useState("");
+  const [passwordChangedAt, setPasswordChangedAt] = useState(initialPasswordChangedAt);
 
   // Handle: remove qualquer "@" (o slide prefixa "@" na render; a borda reforca).
   function handleHandleChange(e: ChangeEvent<HTMLInputElement>) {
@@ -136,8 +152,9 @@ export function SettingsForm({
     setPasswordState("saving");
     setPasswordError("");
     try {
-      await changePassword({ currentPassword, newPassword });
+      const result = await changePassword({ currentPassword, newPassword });
       setPasswordState("saved");
+      setPasswordChangedAt(result.passwordChangedAt);
       setCurrentPassword("");
       setNewPassword("");
     } catch (err) {
@@ -328,7 +345,14 @@ export function SettingsForm({
                 onSubmit={handleChangePassword}
                 className="space-y-3 border-t border-border pt-4"
               >
-                <p className="text-sm font-medium">Trocar senha</p>
+                <div>
+                  <p className="text-sm font-medium">Trocar senha</p>
+                  <p className="text-xs text-muted-foreground">
+                    {passwordChangedAt
+                      ? `Última alteração: ${formatPasswordChangedAt(passwordChangedAt)}`
+                      : "Senha provisória — ainda não foi trocada."}
+                  </p>
+                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="current-password">Senha atual</Label>
                   <Input
@@ -362,7 +386,10 @@ export function SettingsForm({
                   </Button>
                   <span aria-live="polite" className="text-sm">
                     {passwordState === "saved" ? (
-                      <span className="text-muted-foreground">Senha alterada.</span>
+                      <span className="flex items-center gap-1 font-medium text-green-600 dark:text-green-400">
+                        <Check className="h-4 w-4" />
+                        Senha alterada com sucesso.
+                      </span>
                     ) : passwordState === "error" ? (
                       <span className="text-destructive">{passwordError}</span>
                     ) : null}

@@ -15,6 +15,7 @@ import { getDefaultClient } from "@/lib/client-repo";
 import {
   ChangePasswordSchema,
   ClientSettingsSchema,
+  type AccountInfo,
   type ChangePasswordInput,
   type ChangePasswordResult,
   type ClientSettings,
@@ -86,6 +87,27 @@ export async function updateClientSettings(
 }
 
 /**
+ * Le dados da conta (tabela `users`, fora da identidade da marca). Hoje so
+ * passwordChangedAt — exibido na aba Conta como "ultima alteracao de senha".
+ */
+export async function getAccountInfo(): Promise<AccountInfo> {
+  const user = await requireUser();
+
+  const rows = await db
+    .select({ passwordChangedAt: users.passwordChangedAt })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1);
+
+  const row = rows[0];
+  return {
+    passwordChangedAt: row?.passwordChangedAt
+      ? row.passwordChangedAt.toISOString()
+      : null,
+  };
+}
+
+/**
  * Igual a updateClientSettings, mas tambem marca o onboarding como concluido
  * (onboardingCompletedAt = now). Usada pela tela de onboarding do cliente novo
  * (identidade placeholder criada por createClientAccount) para sair do estado
@@ -154,12 +176,13 @@ export async function changePassword(
   }
 
   const newHash = await hash(data.newPassword, BCRYPT_COST);
+  const now = new Date();
 
   await db
     .update(users)
-    .set({ passwordHash: newHash })
+    .set({ passwordHash: newHash, passwordChangedAt: now })
     // ownerId (o proprio id do usuario logado) reforcado na escrita.
     .where(eq(users.id, user.id));
 
-  return { ok: true };
+  return { ok: true, passwordChangedAt: now.toISOString() };
 }

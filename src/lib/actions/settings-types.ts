@@ -74,4 +74,12 @@ export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 
 export interface ChangePasswordResult {
   ok: true;
+  /** ISO — quando a troca foi gravada (mesmo valor que passa a ser o "ultimo". */
+  passwordChangedAt: string;
+}
+
+/** Retorno de getAccountInfo: dados da conta (tabela `users`) fora da identidade da marca. */
+export interface AccountInfo {
+  /** null = senha provisoria nunca foi trocada. */
+  passwordChangedAt: string | null;
 }

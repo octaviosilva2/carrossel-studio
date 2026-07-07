@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth-guard";
-import { getClientSettings } from "@/lib/actions/settings";
+import { getAccountInfo, getClientSettings } from "@/lib/actions/settings";
 import { SettingsForm } from "./settings-form";
 
 // Nao cachear: reflete a identidade padrao persistida mais recente do dono.
@@ -16,9 +16,10 @@ interface SettingsPageProps {
  * (usado pelo rodape da sidebar) abre direto na aba Conta.
  */
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {
-  const [user, settings, params] = await Promise.all([
+  const [user, settings, accountInfo, params] = await Promise.all([
     requireUser(),
     getClientSettings(),
+    getAccountInfo(),
     searchParams,
   ]);
 
@@ -36,6 +37,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           userEmail={user.email ?? ""}
           initialTab={initialTab}
           onboardingCompletedAt={settings.onboardingCompletedAt}
+          initialPasswordChangedAt={accountInfo.passwordChangedAt}
         />
       </div>
     </>

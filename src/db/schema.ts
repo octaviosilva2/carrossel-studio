@@ -21,6 +21,8 @@ export const users = pgTable("users", {
   name: text("name"), // nullable — nome de exibicao opcional
   // 'admin' | 'client' — enforced no app (Zod); text simples no banco.
   role: text("role").notNull().default("client"),
+  // null = senha provisoria nunca foi trocada (nunca preenchido na criacao).
+  passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

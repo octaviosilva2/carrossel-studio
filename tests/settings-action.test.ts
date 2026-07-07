@@ -73,6 +73,7 @@ import { hash } from "bcryptjs";
 import {
   changePassword,
   completeOnboarding,
+  getAccountInfo,
   getClientSettings,
   updateClientSettings,
 } from "@/lib/actions/settings";
@@ -176,6 +177,25 @@ describe("getClientSettings — leitura do dono", () => {
     getDefaultClientMock.mockResolvedValue(clientRow({ onboardingCompletedAt: completedAt }));
     const s = await getClientSettings();
     expect(s.onboardingCompletedAt).toBe("2026-05-01T10:00:00.000Z");
+  });
+});
+
+// =============================================================================
+// getAccountInfo — leitura de passwordChangedAt (tabela users)
+// =============================================================================
+describe("getAccountInfo — última troca de senha", () => {
+  it("retorna null quando a senha provisória nunca foi trocada", async () => {
+    mockState.state.selectResults = [[{ passwordChangedAt: null }]];
+    const info = await getAccountInfo();
+    expect(requireUserMock).toHaveBeenCalledTimes(1);
+    expect(info.passwordChangedAt).toBeNull();
+  });
+
+  it("retorna a data em ISO quando já houve troca", async () => {
+    const changedAt = new Date("2026-06-01T12:00:00.000Z");
+    mockState.state.selectResults = [[{ passwordChangedAt: changedAt }]];
+    const info = await getAccountInfo();
+    expect(info.passwordChangedAt).toBe("2026-06-01T12:00:00.000Z");
   });
 });
 
@@ -304,7 +324,7 @@ describe("changePassword — confirmação da senha atual e troca do hash", () =
     mockState.state.selectResults = [[{ passwordHash: currentHash }]];
   });
 
-  it("troca a senha quando a atual confere", async () => {
+  it("troca a senha quando a atual confere e retorna passwordChangedAt em ISO", async () => {
     const result = await changePassword({
       currentPassword: CURRENT_PASSWORD,
       newPassword: "nova-senha-456",
@@ -312,6 +332,18 @@ describe("changePassword — confirmação da senha atual e troca do hash", () =
     expect(requireUserMock).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(true);
     expect(mockState.state.updateCalled).toBe(true);
+    expect(Number.isNaN(Date.parse(result.passwordChangedAt))).toBe(false);
+  });
+
+  it("grava passwordChangedAt no SET junto com o novo hash", async () => {
+    await changePassword({
+      currentPassword: CURRENT_PASSWORD,
+      newPassword: "nova-senha-456",
+    });
+    const hasPasswordChangedAt = mockState.state.setArgs.some(
+      (s) => typeof s === "object" && s !== null && "passwordChangedAt" in s,
+    );
+    expect(hasPasswordChangedAt).toBe(true);
   });
 
   it("senha atual incorreta rejeita sem gravar", async () => {
