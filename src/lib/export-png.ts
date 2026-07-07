@@ -1,6 +1,6 @@
 "use client";
 
-import { toPng } from "html-to-image";
+import { domToPng } from "modern-screenshot";
 import JSZip from "jszip";
 
 import { CANVAS_H, CANVAS_W } from "@/components/slide/slide-tokens";
@@ -13,8 +13,19 @@ import type { SlideData, SlideTheme } from "@/components/slide/types";
 
 // Utilitario de export DOM->PNG (client-side: usa window/document/canvas).
 // Estrategia de dimensao: o no do <Slide> ja e renderizado em 1080x1350 px CSS
-// REAIS, entao capturamos com pixelRatio 1 -> o PNG sai EXATAMENTE 1080x1350,
-// sem fator de escala (elimina o risco de DPR errado, o criterio central da S1).
+// REAIS, entao capturamos com scale 1 -> o PNG sai EXATAMENTE 1080x1350, sem
+// fator de escala (elimina o risco de DPR errado, o criterio central da S1).
+//
+// Usa `modern-screenshot` (fork ativamente mantido de `html-to-image`) em vez
+// do `html-to-image` original: o Safari/iOS tem um bug conhecido e amplamente
+// documentado (varias issues abertas no html-to-image/dom-to-image) onde
+// imagens embutidas no SVG interno usado pra rasterizar (<foreignObject>) as
+// vezes nao terminam de decodificar a tempo, saindo em branco no PNG final —
+// so no Safari, so na captura (o preview normal do <img> na tela nunca mostra
+// o bug). O modern-screenshot corrige isso internamente (retry de drawImage
+// calibrado pro Safari); nenhuma outra correcao de timing daqui resolve, pois
+// o problema e dentro do proprio pipeline de rasterizacao da lib, nao no
+// carregamento da imagem original.
 
 export interface ExportResult {
   blob: Blob;
@@ -48,11 +59,11 @@ export async function renderSlideToPng(node: HTMLElement): Promise<ExportResult>
   }
   await waitForImagesDecoded(node);
 
-  const dataUrl = await toPng(node, {
+  const dataUrl = await domToPng(node, {
     width: CANVAS_W,
     height: CANVAS_H,
-    pixelRatio: 1, // no ja esta no tamanho fisico final -> 1:1
-    cacheBust: true, // evita asset em cache stale
+    scale: 1, // no ja esta no tamanho fisico final -> 1:1
+    fetch: { bypassingCache: true }, // evita asset em cache stale
   });
 
   const blob = await dataUrlToBlob(dataUrl);

@@ -5,10 +5,11 @@ import JSZip from "jszip";
 // mais o comportamento de `toExportSafeUrl` (mitigacao do tainted canvas).
 //
 // Estrategia de mock (fronteiras de browser caras/instaveis apenas):
-// - `html-to-image.toPng`: mockado para devolver uma data-URL de PNG deterministica
-//   por no. Assim `renderSlideToPng`/`renderSlidesToPngs` produzem Blobs REAIS de PNG
-//   (via fetch de data-URL, que o jsdom suporta) sem precisar de canvas/DOM real.
-//   O objetivo do teste e provar a montagem/ordem do ZIP, nao a rasterizacao.
+// - `modern-screenshot.domToPng`: mockado para devolver uma data-URL de PNG
+//   deterministica por no. Assim `renderSlideToPng`/`renderSlidesToPngs` produzem
+//   Blobs REAIS de PNG (via fetch de data-URL, que o jsdom suporta) sem precisar
+//   de canvas/DOM real. O objetivo do teste e provar a montagem/ordem do ZIP,
+//   nao a rasterizacao.
 // - `URL.createObjectURL`/`revokeObjectURL`: stub, pois `triggerBlobDownload`
 //   (chamado no fim de exportCarouselToZip) usa objectURL, ausente no jsdom.
 //   Capturamos o Blob do ZIP nesse stub para reabrir e inspecionar as entradas.
@@ -19,10 +20,11 @@ const PNG_1x1_BASE64 =
 
 const PNG_1x1_DATAURL = `data:image/png;base64,${PNG_1x1_BASE64}`;
 
-// html-to-image e um ESM default+named; mockamos o named `toPng` usado no modulo.
-vi.mock("html-to-image", () => ({
+// modern-screenshot e um ESM com varios named exports; mockamos so o `domToPng`
+// usado no modulo (troca do antigo html-to-image — ver export-png.ts).
+vi.mock("modern-screenshot", () => ({
   // Cada chamada devolve a mesma data-URL deterministica — suficiente para o ZIP.
-  toPng: vi.fn(async () => PNG_1x1_DATAURL),
+  domToPng: vi.fn(async () => PNG_1x1_DATAURL),
 }));
 
 import {

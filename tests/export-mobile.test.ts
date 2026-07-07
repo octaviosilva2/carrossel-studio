@@ -6,15 +6,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 //    visual; cai pro download tradicional quando o share nao esta disponivel,
 //    recusa o arquivo, ou falha por um motivo que NAO seja cancelamento do usuario.
 // 2) renderSlideToPng aguarda o decode() de toda <img> do no ANTES de chamar
-//    toPng() — sem isso ha uma corrida (perdida com mais frequencia em celulares
-//    mais lentos) entre a rasterizacao e o decode assincrono da imagem, que fazia
-//    o avatar sair em branco no PNG exportado.
+//    domToPng() — reforco de timing (nao e a causa raiz do avatar em branco no
+//    Safari/iOS, que e um bug conhecido do proprio pipeline SVG do
+//    html-to-image/modern-screenshot, ver comentario em export-png.ts).
 
-vi.mock("html-to-image", () => ({
-  toPng: vi.fn(async () => "data:image/png;base64,AAAA"),
+vi.mock("modern-screenshot", () => ({
+  domToPng: vi.fn(async () => "data:image/png;base64,AAAA"),
 }));
 
-import { toPng } from "html-to-image";
+import { domToPng } from "modern-screenshot";
 import { renderSlideToPng, shareOrDownloadBlob } from "@/lib/export-png";
 
 // --- shareOrDownloadBlob -------------------------------------------------------
@@ -107,7 +107,7 @@ describe("shareOrDownloadBlob", () => {
 // --- renderSlideToPng — espera o decode() das <img> -----------------------------
 
 describe("renderSlideToPng — aguarda o decode das <img> antes de capturar", () => {
-  it("só chama toPng() depois que a <img> do nó terminou de decodificar", async () => {
+  it("só chama domToPng() depois que a <img> do nó terminou de decodificar", async () => {
     const node = document.createElement("div");
     const img = document.createElement("img");
     let decodeResolved = false;
@@ -122,7 +122,7 @@ describe("renderSlideToPng — aguarda o decode das <img> antes de capturar", ()
     );
     node.appendChild(img);
 
-    vi.mocked(toPng).mockImplementation(async () => {
+    vi.mocked(domToPng).mockImplementation(async () => {
       expect(decodeResolved).toBe(true);
       return "data:image/png;base64,AAAA";
     });
@@ -142,7 +142,7 @@ describe("renderSlideToPng — aguarda o decode das <img> antes de capturar", ()
     img.decode = vi.fn(() => Promise.reject(new Error("decode falhou")));
     node.appendChild(img);
 
-    vi.mocked(toPng).mockResolvedValue("data:image/png;base64,AAAA");
+    vi.mocked(domToPng).mockResolvedValue("data:image/png;base64,AAAA");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: true, blob: async () => new Blob() })),
