@@ -55,7 +55,7 @@ export function SlideNav({
             Nenhum slide. Clique em &quot;Adicionar slide&quot; para comecar.
           </p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-2.5">
             {slides.map((slide, index) => {
               const isSelected = slide.id === selectedSlideId;
               const isFirst = index === 0;
@@ -64,7 +64,7 @@ export function SlideNav({
                 <li key={slide.id}>
                   <div
                     className={cn(
-                      "flex items-center gap-2 rounded-md border p-2 transition-colors",
+                      "flex items-center gap-2 rounded-md border p-2.5 transition-colors",
                       isSelected
                         ? "border-primary bg-accent"
                         : "border-border",
@@ -77,7 +77,7 @@ export function SlideNav({
                         dispatch({ type: "SELECT_SLIDE", id: slide.id })
                       }
                       aria-current={isSelected}
-                      className="flex min-w-0 flex-1 flex-col items-start rounded-sm px-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-sm px-1 py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <span className="text-xs font-medium text-muted-foreground">
                         Slide {index + 1}

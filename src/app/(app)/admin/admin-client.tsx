@@ -93,7 +93,7 @@ export function AdminClient({ initialClients }: AdminClientProps) {
   }
 
   return (
-    <div className="max-w-4xl space-y-4 p-5">
+    <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Criar novo cliente</CardTitle>

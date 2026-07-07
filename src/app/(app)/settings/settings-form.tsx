@@ -25,7 +25,7 @@ interface SettingsFormProps {
   initial: ClientSettings;
   userEmail: string;
   initialTab: "identity" | "account";
-  /** null = onboarding nunca completo (mock — ver getOnboardingCompletedAtMock). */
+  /** null = onboarding ainda nao concluido (client.onboardingCompletedAt no banco). */
   onboardingCompletedAt: string | null;
 }
 
@@ -46,6 +46,7 @@ export function SettingsForm({
 }: SettingsFormProps) {
   const [tab, setTab] = useState<"identity" | "account">(initialTab);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [onboardingDone, setOnboardingDone] = useState(onboardingCompletedAt !== null);
 
   const [name, setName] = useState(initial.name);
   const [handle, setHandle] = useState(initial.handle);
@@ -122,6 +123,7 @@ export function SettingsForm({
     try {
       await updateClientSettings({ name, handle, avatarUrl, verified, theme });
       setSaveState("saved");
+      setOnboardingDone(true);
     } catch {
       // Nunca vaza detalhe tecnico — mensagem generica (a borda ja validou/rejeitou).
       setSaveState("error");
@@ -149,7 +151,7 @@ export function SettingsForm({
   }
 
   const isBusy = saveState === "saving" || isUploading;
-  const showOnboardingBanner = onboardingCompletedAt === null && !bannerDismissed;
+  const showOnboardingBanner = !onboardingDone && !bannerDismissed;
 
   return (
     <div className="space-y-4">

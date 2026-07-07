@@ -8,10 +8,10 @@ vi.mock("@/lib/actions/carousels", () => ({
   saveCarousel: vi.fn(),
   deleteCarousel: vi.fn(),
 }));
-// O AssistantPanel (drawer) importa generateForEditor — mock para nao arrastar
-// next-auth/@/db ao jsdom (mesma razao dos demais mocks de fronteira).
-vi.mock("@/lib/actions/generate", () => ({
-  generateForEditor: vi.fn(),
+// O AssistantPanel (drawer) importa chatWithAssistant — mock para nao arrastar
+// server-only/claude-chat/next-auth ao jsdom (mesma razao dos demais mocks de fronteira).
+vi.mock("@/lib/actions/assistant", () => ({
+  chatWithAssistant: vi.fn(),
 }));
 vi.mock("@/lib/blob-upload", () => ({
   uploadImageToBlob: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { EditorClient } from "@/app/editor/editor-client";
+import { EditorClient } from "@/app/(app)/editor/editor-client";
 import { initialState } from "@/lib/editor-state";
 
 // Testes de FUMACA da integracao editor (S2). Nao testa pixel/scale/fidelidade de

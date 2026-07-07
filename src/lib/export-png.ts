@@ -225,10 +225,13 @@ export async function toExportSafeUrl(
     throw new Error("Origem de imagem nao permitida para o export.");
   }
 
-  // Cross-origin (Blob): busca os bytes e converte em data-URL. fetch DIRETO
-  // (sem crossOrigin, sem proxy — plano B nao implementado nesta sessao).
+  // Cross-origin (Blob): busca os bytes via PROXY same-origin (/api/blob/proxy) e
+  // converte em data-URL. O proxy evita depender de CORS no bucket — o browser fala
+  // com o proprio Next (same-origin), que busca do MinIO no servidor. O host ja foi
+  // validado acima (allowlist); o proxy revalida no servidor por defesa em profundidade.
   try {
-    const response = await fetch(url);
+    const proxied = `/api/blob/proxy?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxied);
     if (!response.ok) {
       throw new Error(`Falha ao buscar imagem (HTTP ${response.status}).`);
     }

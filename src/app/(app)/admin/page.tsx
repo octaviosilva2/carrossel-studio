@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/app-shell/app-shell";
 import { requireAdmin } from "@/lib/auth-guard";
 import { listClientsAdmin } from "@/lib/actions/admin";
 import { AdminClient } from "./admin-client";
@@ -7,21 +6,18 @@ import { AdminClient } from "./admin-client";
 export const dynamic = "force-dynamic";
 
 /**
- * Painel de administração — só CEO/admin. `requireAdmin()` falha fechado
- * (redireciona pra /dashboard sem role admin) e `listClientsAdmin()` traz os
- * clientes reais do banco (ver src/lib/actions/admin.ts).
+ * Painel de administração — só CEO/admin. AppShell vive no layout do grupo
+ * `(app)`; aqui so o guard ESTRITO (`requireAdmin()` falha fechado — redireciona
+ * pra /dashboard sem role admin, mesmo ja logado) e o conteudo.
+ * `listClientsAdmin()` traz os clientes reais do banco (ver src/lib/actions/admin.ts).
  */
 export default async function AdminPage() {
-  const user = await requireAdmin();
+  await requireAdmin();
   const clients = await listClientsAdmin();
 
   return (
-    <AppShell
-      userName={user.name ?? user.email ?? "Usuário"}
-      userEmail={user.email ?? ""}
-      isAdmin
-    >
-      <header className="sticky top-14 z-10 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-5 backdrop-blur lg:top-0">
+    <>
+      <header className="sticky top-14 z-10 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6 lg:top-0 lg:px-8">
         <h1 className="text-sm font-semibold">Admin</h1>
         <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
           somente CEO/admin
@@ -29,6 +25,6 @@ export default async function AdminPage() {
       </header>
 
       <AdminClient initialClients={clients} />
-    </AppShell>
+    </>
   );
 }

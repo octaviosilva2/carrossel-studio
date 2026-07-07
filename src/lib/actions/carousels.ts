@@ -6,7 +6,7 @@
 // ownerId (falha fechado: id de outro dono => notFound, nao vaza dado alheio).
 
 import { notFound } from "next/navigation";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { carousels, clients, slides } from "@/db/schema";
@@ -137,8 +137,9 @@ const FIRST_SLIDE_SNIPPET_MAX_LENGTH = 60;
 /**
  * Lista os carrosseis do dono (id, title, datas, contagem de slides e snippet
  * do 1o slide), mais recentes primeiro. Filtra por ownerId — nunca lista de
- * outro dono. Segunda query (slides) so roda se houver carrosseis — evita ida
- * ao banco a toa quando a lista esta vazia.
+ * outro dono. UMA query so (LEFT JOIN com slides) — evita o round-trip extra
+ * que a query separada de slides pagava (latencia de rede ate o Postgres),
+ * agregando contagem/snippet aqui em JS.
  */
 export async function listCarousels(): Promise<CarouselListItem[]> {
   const user = await requireUser();
@@ -149,44 +150,43 @@ export async function listCarousels(): Promise<CarouselListItem[]> {
       title: carousels.title,
       updatedAt: carousels.updatedAt,
       createdAt: carousels.createdAt,
+      slidePosition: slides.position,
+      slideBody: slides.body,
     })
     .from(carousels)
+    .leftJoin(slides, eq(slides.carouselId, carousels.id))
     .where(eq(carousels.ownerId, user.id))
     .orderBy(desc(carousels.updatedAt));
 
-  if (rows.length === 0) return [];
-
-  const ids = rows.map((r) => r.id);
-
-  const slideRows = await db
-    .select({
-      carouselId: slides.carouselId,
-      position: slides.position,
-      body: slides.body,
-    })
-    .from(slides)
-    .where(inArray(slides.carouselId, ids));
-
-  // Agrega por carouselId: contagem total + body da position 0 (thumbnail textual).
-  const slideInfoByCarousel = new Map<string, { count: number; firstBody: string }>();
-  for (const s of slideRows) {
-    const info = slideInfoByCarousel.get(s.carouselId) ?? { count: 0, firstBody: "" };
-    info.count += 1;
-    if (s.position === 0) info.firstBody = s.body;
-    slideInfoByCarousel.set(s.carouselId, info);
+  // Agrega por carouselId (preserva a ordem de 1a ocorrencia = updatedAt DESC):
+  // contagem total de slides + body da position 0 (thumbnail textual). Carrossel
+  // sem slide vira 1 linha com slidePosition/slideBody null (LEFT JOIN).
+  const items = new Map<string, CarouselListItem>();
+  for (const row of rows) {
+    let item = items.get(row.id);
+    if (!item) {
+      item = {
+        id: row.id,
+        title: row.title,
+        updatedAt: row.updatedAt.toISOString(),
+        createdAt: row.createdAt.toISOString(),
+        slideCount: 0,
+        firstSlideBody: "",
+      };
+      items.set(row.id, item);
+    }
+    if (row.slidePosition !== null) {
+      item.slideCount += 1;
+      if (row.slidePosition === 0) {
+        item.firstSlideBody = truncateSnippet(
+          row.slideBody ?? "",
+          FIRST_SLIDE_SNIPPET_MAX_LENGTH,
+        );
+      }
+    }
   }
 
-  return rows.map((r) => {
-    const info = slideInfoByCarousel.get(r.id) ?? { count: 0, firstBody: "" };
-    return {
-      id: r.id,
-      title: r.title,
-      updatedAt: r.updatedAt.toISOString(),
-      createdAt: r.createdAt.toISOString(),
-      slideCount: info.count,
-      firstSlideBody: truncateSnippet(info.firstBody, FIRST_SLIDE_SNIPPET_MAX_LENGTH),
-    };
-  });
+  return Array.from(items.values());
 }
 
 /**
@@ -211,23 +211,22 @@ export async function getCarousel(rawId: string): Promise<EditorState> {
   const carousel = carouselRows[0];
   if (!carousel) notFound();
 
-  const clientRows = await db
-    .select()
-    .from(clients)
-    .where(eq(clients.id, carousel.clientId))
-    .limit(1);
+  // client e slides nao dependem um do outro (so de `carousel`, ja em mao) —
+  // dispara as duas em paralelo em vez de pagar 2 round-trips em serie.
+  const [clientRows, slideRows] = await Promise.all([
+    db.select().from(clients).where(eq(clients.id, carousel.clientId)).limit(1),
+    db
+      .select({
+        position: slides.position,
+        body: slides.body,
+        imageUrl: slides.imageUrl,
+      })
+      .from(slides)
+      .where(eq(slides.carouselId, carousel.id)),
+  ]);
 
   const client = clientRows[0];
   if (!client) notFound();
-
-  const slideRows = await db
-    .select({
-      position: slides.position,
-      body: slides.body,
-      imageUrl: slides.imageUrl,
-    })
-    .from(slides)
-    .where(eq(slides.carouselId, carousel.id));
 
   return rowToEditorState(client, carousel, slideRows);
 }

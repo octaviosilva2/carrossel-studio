@@ -8,21 +8,19 @@ import {
   ChevronRight,
   History,
   LayoutGrid,
+  LogOut,
   Menu,
-  Moon,
   Settings,
   ShieldCheck,
-  Sun,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { signOutAction } from "@/lib/actions/auth";
 import { Logo } from "./logo";
-import { NewCarouselButton } from "./new-carousel-button";
 
-const THEME_STORAGE_KEY = "carrossel-studio-theme";
 const SIDEBAR_STORAGE_KEY = "carrossel-studio-sidebar-collapsed";
 
 interface NavItemDef {
@@ -47,33 +45,22 @@ interface AppShellProps {
 /**
  * Casca visual compartilhada por toda pagina logada (exceto /login e
  * /onboarding): sidebar fixa colapsavel em telas lg+, vira Sheet (drawer) em
- * telas menores, com toggle de tema do app persistido em localStorage.
+ * telas menores. Tema do app e sempre claro (sem opcao de troca).
  */
 export function AppShell({ children, userName, userEmail, isAdmin }: AppShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isDark, setIsDark] = useState(false);
 
-  // Le preferencias persistidas so no cliente (evita mismatch de hidratacao SSR).
+  // Le preferencia persistida so no cliente (evita mismatch de hidratacao SSR).
   useEffect(() => {
     if (localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1") setCollapsed(true);
-    setIsDark(document.documentElement.classList.contains("dark"));
   }, []);
 
   function toggleCollapsed() {
     setCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "1" : "0");
-      return next;
-    });
-  }
-
-  function toggleTheme() {
-    setIsDark((prev) => {
-      const next = !prev;
-      document.documentElement.classList.toggle("dark", next);
-      localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "light");
       return next;
     });
   }
@@ -92,36 +79,38 @@ export function AppShell({ children, userName, userEmail, isAdmin }: AppShellPro
         <div
           className={cn(
             "flex h-14 items-center gap-2 border-b border-border px-4",
-            collapsed && "justify-center px-0",
+            collapsed && "justify-center px-2",
           )}
         >
-          <Logo className="h-7 w-7 shrink-0 text-primary" />
           {!collapsed ? (
-            <span className="truncate text-sm font-semibold tracking-tight">
-              Carrossel Studio
-            </span>
-          ) : null}
-          {!collapsed ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="ml-auto h-7 w-7 shrink-0 text-muted-foreground"
-              onClick={toggleCollapsed}
-              title="Recolher menu"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+            <>
+              {/* Expandido: logo + nome + botao de recolher. */}
+              <Logo className="h-7 w-7 shrink-0 text-primary" />
+              <span className="truncate text-sm font-semibold tracking-tight">
+                Carrossel Studio
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="ml-auto h-7 w-7 shrink-0 text-muted-foreground"
+                onClick={toggleCollapsed}
+                title="Recolher menu"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </>
           ) : (
+            // Recolhido: o botao de expandir ocupa o lugar da logo (a logo some).
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="absolute -right-3 top-3 hidden h-6 w-6 rounded-full border border-border bg-background lg:flex"
+              className="h-8 w-8 shrink-0 text-muted-foreground"
               onClick={toggleCollapsed}
               title="Expandir menu"
             >
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className="h-5 w-5" />
             </Button>
           )}
         </div>
@@ -135,8 +124,6 @@ export function AppShell({ children, userName, userEmail, isAdmin }: AppShellPro
           userEmail={userEmail}
           initial={initial}
           collapsed={collapsed}
-          isDark={isDark}
-          onToggleTheme={toggleTheme}
         />
       </aside>
 
@@ -163,8 +150,6 @@ export function AppShell({ children, userName, userEmail, isAdmin }: AppShellPro
             userEmail={userEmail}
             initial={initial}
             collapsed={false}
-            isDark={isDark}
-            onToggleTheme={toggleTheme}
             onNavigate={() => setMobileOpen(false)}
           />
         </SheetContent>
@@ -229,15 +214,6 @@ function NavList({
         );
       })}
 
-      <NewCarouselButton
-        variant="ghost"
-        className={cn(
-          "w-full justify-start gap-2.5 px-2.5 py-2 text-sm font-normal text-muted-foreground hover:bg-accent hover:text-foreground",
-          collapsed && "justify-center px-0",
-        )}
-        label={collapsed ? undefined : "Novo carrossel"}
-      />
-
       {isAdmin ? (
         <div className="mt-2.5 border-t border-border pt-2.5">
           {!collapsed ? (
@@ -273,23 +249,19 @@ function NavList({
   );
 }
 
-// Rodape da sidebar: usuario logado + toggle de tema. Compartilhado entre a
+// Rodape da sidebar: usuario logado + logout. Compartilhado entre a
 // sidebar fixa e o drawer mobile (so muda `collapsed`/`onNavigate`).
 function SidebarFooter({
   userName,
   userEmail,
   initial,
   collapsed,
-  isDark,
-  onToggleTheme,
   onNavigate,
 }: {
   userName: string;
   userEmail: string;
   initial: string;
   collapsed: boolean;
-  isDark: boolean;
-  onToggleTheme: () => void;
   onNavigate?: () => void;
 }) {
   return (
@@ -314,23 +286,21 @@ function SidebarFooter({
           </span>
         ) : null}
       </Link>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className={cn(
-          "w-full text-xs",
-          collapsed ? "justify-center px-0" : "justify-between",
-        )}
-        onClick={onToggleTheme}
-        title="Alternar tema do app"
-      >
-        {!collapsed ? <span>Tema do app</span> : null}
-        <span className="flex items-center gap-1">
-          {isDark ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-          {!collapsed ? (isDark ? "Escuro" : "Claro") : null}
-        </span>
-      </Button>
+      <form action={signOutAction}>
+        <Button
+          type="submit"
+          variant="outline"
+          size="sm"
+          className={cn(
+            "w-full text-xs",
+            collapsed ? "justify-center px-0" : "justify-between",
+          )}
+          title="Sair da conta"
+        >
+          {!collapsed ? <span>Sair</span> : null}
+          <LogOut className="h-3.5 w-3.5" />
+        </Button>
+      </form>
     </div>
   );
 }

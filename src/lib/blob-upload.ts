@@ -1,8 +1,10 @@
-// Wrapper client do upload no MinIO/S3. Roda no browser (client component).
-// Valida o arquivo antes (mesma regra 6 MB/tipo) e pede ao handler /api/blob/upload
-// uma presigned PUT (que exige sessao e reforca as regras no server); depois faz o
-// PUT direto no MinIO. Contrato publico (UploadResult, uploadImageToBlob) inalterado
-// — consumido por settings-form, identity-panel e slide-editor.
+// Wrapper client do upload de imagem. Roda no browser (client component). Valida o
+// arquivo antes (mesma regra 6 MB/tipo) e envia ao handler /api/blob/upload, que
+// exige sessao, reforca as regras no server e repassa ao MinIO (proxy server-side).
+// Antes o browser fazia um PUT direto no MinIO — mas isso exigia CORS liberado no
+// bucket. Agora o upload e same-origin (browser -> /api do Next), entao nao ha CORS.
+// Contrato publico (UploadResult, uploadImageToBlob) INALTERADO — consumido por
+// settings-form, onboarding-form, identity-panel e slide-editor.
 
 import { validateImageFile } from "@/lib/image-upload";
 
@@ -11,32 +13,23 @@ export type UploadResult =
   | { ok: true; url: string }
   | { ok: false; error: string };
 
-/** Resposta do handler de presigned. Validada na borda antes de usar. */
-type PresignResponse = {
-  uploadUrl: string;
-  publicUrl: string;
-  contentType: string;
-};
+/** Resposta do handler de upload. Validada na borda antes de usar. */
+type UploadResponse = { url: string };
 
 /** Type guard: confirma o shape da resposta do handler (dado externo = unknown). */
-function isPresignResponse(value: unknown): value is PresignResponse {
+function isUploadResponse(value: unknown): value is UploadResponse {
   if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.uploadUrl === "string" &&
-    typeof v.publicUrl === "string" &&
-    typeof v.contentType === "string"
-  );
+  return typeof (value as Record<string, unknown>).url === "string";
 }
 
 /** Mensagem generica de falha (nao vaza detalhe tecnico ao usuario). */
 const GENERIC_ERROR = "Falha ao enviar a imagem. Tente de novo.";
 
 /**
- * Valida e envia uma imagem ao MinIO via presigned PUT. Retorna a URL publica em
- * sucesso. Falha fechado: validacao invalida ou erro de rede => `{ ok:false }`, sem
- * mutar estado. A key do objeto e derivada no server (nao no client); a unicidade
- * vem do randomUUID do handler.
+ * Valida e envia uma imagem ao MinIO via proxy do servidor. Retorna a URL publica
+ * em sucesso. Falha fechado: validacao invalida ou erro de rede => `{ ok:false }`,
+ * sem mutar estado. A key do objeto e derivada no server (nao no client); a
+ * unicidade vem do randomUUID do handler.
  */
 export async function uploadImageToBlob(file: File): Promise<UploadResult> {
   const validation = validateImageFile(file);
@@ -45,41 +38,27 @@ export async function uploadImageToBlob(file: File): Promise<UploadResult> {
   }
 
   try {
-    // 1) Pede a presigned ao handler (que exige sessao e revalida tipo/tamanho).
-    const presignRes = await fetch("/api/blob/upload", {
+    // Envia o arquivo como multipart/form-data ao handler (same-origin: sem CORS).
+    // O browser define o boundary do Content-Type sozinho ao receber um FormData.
+    const form = new FormData();
+    form.append("file", file);
+
+    const res = await fetch("/api/blob/upload", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        filename: file.name,
-        contentType: file.type,
-        size: file.size,
-      }),
+      body: form,
     });
-    if (!presignRes.ok) {
+    if (!res.ok) {
       return { ok: false, error: GENERIC_ERROR };
     }
 
-    const data: unknown = await presignRes.json();
-    if (!isPresignResponse(data)) {
-      return { ok: false, error: GENERIC_ERROR };
-    }
-    const { uploadUrl, publicUrl, contentType } = data;
-
-    // 2) PUT direto no MinIO. O header Content-Type usa o `contentType` ECOADO pelo
-    //    handler (o mesmo que foi assinado) — nao o file.type reinferido — senao a
-    //    assinatura nao bate.
-    const putRes = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: { "content-type": contentType },
-      body: file,
-    });
-    if (!putRes.ok) {
+    const data: unknown = await res.json();
+    if (!isUploadResponse(data)) {
       return { ok: false, error: GENERIC_ERROR };
     }
 
-    return { ok: true, url: publicUrl };
+    return { ok: true, url: data.url };
   } catch {
-    // Mensagem generica ao usuario; detalhe fica no console do browser (rede/CORS).
+    // Mensagem generica ao usuario; detalhe fica no console do browser (rede).
     return { ok: false, error: GENERIC_ERROR };
   }
 }

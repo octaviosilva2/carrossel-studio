@@ -53,6 +53,7 @@ const mockState = vi.hoisted(() => {
       "select",
       "from",
       "where",
+      "leftJoin",
       "orderBy",
       "limit",
       "insert",
@@ -369,11 +370,25 @@ describe("listCarousels — só os do dono (AC 18)", () => {
   it("mapeia as linhas para CarouselListItem com datas ISO, slideCount e snippet do 1o slide", async () => {
     const updatedAt = new Date("2026-06-30T12:00:00.000Z");
     const createdAt = new Date("2026-06-01T09:00:00.000Z");
+    // Query unica (LEFT JOIN): 1 linha por slide, colunas do carousel repetidas.
     mockState.state.dbResults = [
-      [{ id: VALID_UUID, title: "X", updatedAt, createdAt }],
       [
-        { carouselId: VALID_UUID, position: 0, body: "Primeiro slide" },
-        { carouselId: VALID_UUID, position: 1, body: "Segundo slide" },
+        {
+          id: VALID_UUID,
+          title: "X",
+          updatedAt,
+          createdAt,
+          slidePosition: 0,
+          slideBody: "Primeiro slide",
+        },
+        {
+          id: VALID_UUID,
+          title: "X",
+          updatedAt,
+          createdAt,
+          slidePosition: 1,
+          slideBody: "Segundo slide",
+        },
       ],
     ];
 
@@ -391,10 +406,10 @@ describe("listCarousels — só os do dono (AC 18)", () => {
     ]);
   });
 
-  it("lista vazia quando o dono não tem carrosséis (não roda a query de slides)", async () => {
+  it("lista vazia quando o dono não tem carrosséis", async () => {
     mockState.state.dbResults = [[]];
     expect(await listCarousels()).toEqual([]);
-    // So 1 resultado consumido da fila — a 2a query (slides) nunca rodou.
+    // Query unica (JOIN) — so 1 resultado consumido da fila.
     expect(mockState.state.resultCursor).toBe(1);
   });
 
@@ -402,8 +417,16 @@ describe("listCarousels — só os do dono (AC 18)", () => {
     const now = new Date();
     const longBody = "a".repeat(100);
     mockState.state.dbResults = [
-      [{ id: VALID_UUID, title: "X", updatedAt: now, createdAt: now }],
-      [{ carouselId: VALID_UUID, position: 0, body: longBody }],
+      [
+        {
+          id: VALID_UUID,
+          title: "X",
+          updatedAt: now,
+          createdAt: now,
+          slidePosition: 0,
+          slideBody: longBody,
+        },
+      ],
     ];
 
     const [item] = await listCarousels();
@@ -414,9 +437,18 @@ describe("listCarousels — só os do dono (AC 18)", () => {
 
   it("carrossel sem slides retorna slideCount 0 e snippet vazio", async () => {
     const now = new Date();
+    // LEFT JOIN sem match: 1 linha so, com slidePosition/slideBody null.
     mockState.state.dbResults = [
-      [{ id: VALID_UUID, title: "X", updatedAt: now, createdAt: now }],
-      [],
+      [
+        {
+          id: VALID_UUID,
+          title: "X",
+          updatedAt: now,
+          createdAt: now,
+          slidePosition: null,
+          slideBody: null,
+        },
+      ],
     ];
 
     const [item] = await listCarousels();

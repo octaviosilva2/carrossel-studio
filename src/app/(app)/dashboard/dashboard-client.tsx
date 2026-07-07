@@ -31,7 +31,7 @@ export function DashboardClient({ carousels }: DashboardClientProps) {
   const maxActivity = Math.max(1, ...activity.map((day) => day.count));
 
   return (
-    <div className="max-w-5xl p-5">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       {/* 4 contadores do mesmo tamanho */}
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Total gerados" value={counts.total} />

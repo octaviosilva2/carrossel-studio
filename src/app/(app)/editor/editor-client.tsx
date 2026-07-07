@@ -2,10 +2,16 @@
 
 import { useEffect, useRef, useState, useReducer, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Download, FileArchive, Sparkles, Trash2 } from "lucide-react";
+import { Check, Download, FileArchive, Sparkles, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +44,12 @@ import {
 import type { SlideData } from "@/components/slide/types";
 import { deleteCarousel, saveCarousel } from "@/lib/actions/carousels";
 import type { SaveCarouselInput } from "@/lib/actions/carousel-types";
-import { AssistantPanel } from "./assistant-panel";
+import {
+  AssistantPanel,
+  INITIAL_ASSISTANT_MESSAGES,
+  type AssistantMessage,
+} from "./assistant-panel";
+import type { AssistantCarousel } from "@/lib/actions/assistant-types";
 import { ExportCapture, type ExportCaptureHandle } from "./export-capture";
 import { IdentityPanel } from "./identity-panel";
 import { SlideNav } from "./slide-nav";
@@ -94,24 +105,33 @@ export function EditorClient({ initialState }: EditorClientProps) {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Assistente de IA: recolhido por padrao (ADR 0004 revisada). Abre por botao no
-  // header como drawer sobreposto — nao ocupa mais uma coluna fixa.
+  // Assistente de IA: recolhido por padrao. Abre por botao no header como drawer
+  // sobreposto. O estado do CHAT vive aqui (nao no painel) para PERSISTIR ao fechar/
+  // abrir o drawer — a conversa "fica ali" entre idas e vindas.
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>(
+    INITIAL_ASSISTANT_MESSAGES,
+  );
+  // Dica que aponta o botao "Assistente IA". Comeca visivel a cada entrada no editor
+  // (novo ou ja gerado) e some ao dispensar (X) ou ao abrir o assistente.
+  const [showAssistantHint, setShowAssistantHint] = useState(true);
 
   /**
-   * Aplica o carrossel gerado pela IA no editor (substitui titulo + slides) e
-   * fecha o painel. O autosave (debounce) persiste em seguida.
+   * Aplica no editor o carrossel PROPOSTO pela IA no chat (substitui titulo +
+   * slides). NAO fecha o drawer — o chat continua disponivel. O autosave persiste.
    */
-  function handleApplyGenerated(result: {
-    title: string;
-    slides: { body: string }[];
-  }) {
+  function handleApplyCarousel(carousel: AssistantCarousel) {
     dispatch({
       type: "APPLY_GENERATED",
-      title: result.title,
-      slides: result.slides,
+      title: carousel.title,
+      slides: carousel.slides,
     });
-    setIsAssistantOpen(false);
+  }
+
+  /** Abre o assistente pelo botao do header e dispensa a dica. */
+  function openAssistant() {
+    setShowAssistantHint(false);
+    setIsAssistantOpen(true);
   }
 
   // Estado do export (S4). captureData != null => o <ExportCapture> esta montado
@@ -306,7 +326,7 @@ export function EditorClient({ initialState }: EditorClientProps) {
   return (
     <div className="flex min-h-full flex-col">
       {/* Cabecalho: titulo editavel + status do autosave + excluir. */}
-      <header className="sticky top-14 z-10 flex h-14 flex-wrap items-center gap-3 border-b border-border bg-background/80 px-5 backdrop-blur lg:top-0">
+      <header className="sticky top-14 z-10 flex h-14 flex-wrap items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6 lg:top-0 lg:px-8">
         <Input
           value={title}
           placeholder={DEFAULT_CAROUSEL_TITLE}
@@ -333,17 +353,40 @@ export function EditorClient({ initialState }: EditorClientProps) {
           )}
         </span>
 
-        {/* Assistente de IA: abre o drawer (não é mais coluna fixa). */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          onClick={() => setIsAssistantOpen(true)}
-        >
-          <Sparkles className="h-4 w-4" />
-          Assistente IA
-        </Button>
+        {/* Assistente de IA: abre o drawer. A dica aponta o botão e é dispensável. */}
+        <div className="relative ml-auto">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={openAssistant}
+          >
+            <Sparkles className="h-4 w-4" />
+            Assistente IA
+          </Button>
+
+          {showAssistantHint ? (
+            <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-lg border border-border bg-card p-3 text-left shadow-md">
+              {/* Setinha apontando o botão. */}
+              <span className="absolute -top-1.5 right-6 h-3 w-3 rotate-45 border-l border-t border-border bg-card" />
+              <button
+                type="button"
+                aria-label="Dispensar dica"
+                onClick={() => setShowAssistantHint(false)}
+                className="absolute right-1.5 top-1.5 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+              <p className="flex items-center gap-1.5 text-sm font-semibold">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                Crie com IA
+              </p>
+              <p className="mt-0.5 pr-4 text-xs text-muted-foreground">
+                Abra o Assistente IA para gerar ou ajustar seu carrossel por chat.
+              </p>
+            </div>
+          ) : null}
+        </div>
 
         <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
           <DialogTrigger asChild>
@@ -393,12 +436,12 @@ export function EditorClient({ initialState }: EditorClientProps) {
         <ExportCapture ref={captureRef} slides={captureData} />
       ) : null}
 
-      {/* Layout 2 colunas (ADR 0004 revisada): edição | preview protagonista.
-          O assistente saiu da grade (virou drawer). Empilha abaixo de lg na
-          ordem natural: edição -> preview. */}
+      {/* Layout 3 colunas proporcionais: edição | preview protagonista | identidade.
+          Larguras em % com min/max (escalam com a tela em vez de px fixos). Empilha
+          abaixo de lg na ordem: edição -> preview -> identidade+exportação. */}
       <div className="flex flex-1 flex-col lg:h-[calc(100vh-3.5rem)] lg:flex-row lg:overflow-hidden">
-        {/* ESQUERDA: edição (slides + slide selecionado). Enxuta, ~38%. */}
-        <div className="min-w-0 shrink-0 space-y-4 overflow-y-auto p-4 lg:w-[380px] lg:border-r lg:border-border">
+        {/* ESQUERDA: edição (slides + slide selecionado). Um pouco mais larga. */}
+        <div className="min-w-0 shrink-0 space-y-4 overflow-y-auto p-4 lg:w-[34%] lg:min-w-[320px] lg:max-w-[440px] lg:border-r lg:border-border">
           <SlideNav
             slides={state.slides}
             selectedSlideId={state.selectedSlideId}
@@ -407,76 +450,79 @@ export function EditorClient({ initialState }: EditorClientProps) {
           <SlideEditor slide={selectedSlide} dispatch={dispatch} />
         </div>
 
-        {/* DIREITA: preview protagonista. Ordem: baixar (topo) -> preview ->
-            identidade (abaixo). */}
-        <div className="min-w-0 flex-1 space-y-4 overflow-y-auto border-t border-border p-4 lg:border-t-0">
-          {/* Exportação ACIMA do preview. */}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              className="flex-1 justify-center"
-              onClick={handleExportZip}
-              disabled={state.slides.length === 0 || isExporting || isSaving}
-            >
-              {exportState.status === "done" && exportState.kind === "zip" ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <FileArchive className="h-4 w-4" />
-              )}
-              {exportState.status === "working" && exportState.kind === "zip"
-                ? "Gerando ZIP…"
-                : "Baixar todos (ZIP)"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1 justify-center"
-              onClick={handleExportSlide}
-              disabled={selectedSlide === null || isExporting || isSaving}
-            >
-              {exportState.status === "done" && exportState.kind === "single" ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              {exportState.status === "working" && exportState.kind === "single"
-                ? "Gerando…"
-                : "Este slide (PNG)"}
-            </Button>
+        {/* CENTRO: preview protagonista. Ocupa o espaço restante e centraliza. */}
+        <div className="flex min-w-0 flex-1 justify-center overflow-y-auto border-t border-border p-4 lg:border-t-0">
+          <div className="w-full max-w-[520px]">
+            <ThemePreview
+              identity={state.identity}
+              theme={state.theme}
+              slides={state.slides}
+              slide={selectedSlide}
+              dispatch={dispatch}
+            />
           </div>
+        </div>
 
-          {/* Feedback do export (aria-live). */}
-          <div aria-live="polite" className="min-h-[1.25rem]">
-            {exportState.status === "done" ? (
-              <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                Exportado.
-              </p>
-            ) : null}
-            {exportState.status === "error" ? (
-              <p role="alert" className="text-sm text-destructive">
-                {exportState.message}
-              </p>
-            ) : null}
-          </div>
+        {/* DIREITA: identidade (sempre à direita) + exportação abaixo, no espaço que
+            sobra. Botões menores, empilhados. */}
+        <div className="min-w-0 shrink-0 space-y-4 overflow-y-auto border-t border-border p-4 lg:w-[30%] lg:min-w-[300px] lg:max-w-[360px] lg:border-l lg:border-t-0">
+          <IdentityPanel identity={state.identity} dispatch={dispatch} />
 
-          {/* Preview (à esquerda) + Identidade (à direita), lado a lado em telas
-              largas; empilha abaixo de xl. O preview fica compacto à esquerda e a
-              identidade preenche a direita, equilibrando o espaço. */}
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-            <div className="xl:w-[432px] xl:shrink-0">
-              <ThemePreview
-                identity={state.identity}
-                theme={state.theme}
-                slides={state.slides}
-                slide={selectedSlide}
-                dispatch={dispatch}
-              />
-            </div>
-            {/* Identidade com largura contida (form) — não estica com o espaço. */}
-            <div className="w-full xl:w-[340px] xl:shrink-0">
-              <IdentityPanel identity={state.identity} dispatch={dispatch} />
-            </div>
-          </div>
+          {/* Exportação: agrupada num card compacto, abaixo da identidade. */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Exportar</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button
+                type="button"
+                size="sm"
+                className="w-full justify-center"
+                onClick={handleExportZip}
+                disabled={state.slides.length === 0 || isExporting || isSaving}
+              >
+                {exportState.status === "done" && exportState.kind === "zip" ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <FileArchive className="h-4 w-4" />
+                )}
+                {exportState.status === "working" && exportState.kind === "zip"
+                  ? "Gerando ZIP…"
+                  : "Baixar todos (ZIP)"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full justify-center"
+                onClick={handleExportSlide}
+                disabled={selectedSlide === null || isExporting || isSaving}
+              >
+                {exportState.status === "done" && exportState.kind === "single" ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {exportState.status === "working" && exportState.kind === "single"
+                  ? "Gerando…"
+                  : "Este slide (PNG)"}
+              </Button>
+
+              {/* Feedback do export (aria-live). */}
+              <div aria-live="polite" className="min-h-[1.25rem]">
+                {exportState.status === "done" ? (
+                  <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                    Exportado.
+                  </p>
+                ) : null}
+                {exportState.status === "error" ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    {exportState.message}
+                  </p>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -491,13 +537,18 @@ export function EditorClient({ initialState }: EditorClientProps) {
               <Sparkles className="h-4 w-4 text-primary" />
               Assistente IA
             </SheetTitle>
-            {/* Descrição só para leitores de tela (o banner visível vem no painel). */}
+            {/* Descrição só para leitores de tela. */}
             <SheetDescription className="sr-only">
-              Descreva o carrossel e a IA gera os slides aqui no editor.
+              Converse com a IA para gerar ou ajustar seu carrossel. Ela pode
+              pesquisar na web e propor slides para você aplicar.
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1">
-            <AssistantPanel onApply={handleApplyGenerated} />
+            <AssistantPanel
+              messages={assistantMessages}
+              setMessages={setAssistantMessages}
+              onApplyCarousel={handleApplyCarousel}
+            />
           </div>
         </SheetContent>
       </Sheet>

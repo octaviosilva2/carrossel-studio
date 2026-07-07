@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { AppShell } from "@/components/app-shell/app-shell";
-import { requireUser } from "@/lib/auth-guard";
 import { createCarousel, getCarousel } from "@/lib/actions/carousels";
 import { EditorClient } from "./editor-client";
 
@@ -14,9 +12,12 @@ interface EditorPageProps {
 }
 
 /**
- * Wrapper Server Component do editor. Le `?id=` e resolve o estado inicial:
- * - com id  -> getCarousel(id) (o 404 do dono errado/inexistente vem da action) e
- *   passa o EditorState pronto ao Client (semente do useReducer).
+ * Wrapper Server Component do editor. AppShell vive no layout do grupo `(app)`
+ * (guard de sessao ja aplicado la); aqui so a logica do editor. Le `?id=` e
+ * resolve o estado inicial:
+ * - com id  -> getCarousel(id) (o 404 do dono errado/inexistente vem da action,
+ *   que chama requireUser() internamente) e passa o EditorState pronto ao
+ *   Client (semente do useReducer).
  * - sem id  -> cria um carrossel novo (createCarousel) e redireciona para
  *   /editor?id=<novo> — todo carrossel tem id antes de editar (AC 20).
  *
@@ -25,8 +26,6 @@ interface EditorPageProps {
  * banco; o autosave do EditorClient persiste o titulo escolhido pouco depois.
  */
 export default async function EditorPage({ searchParams }: EditorPageProps) {
-  const user = await requireUser();
-
   const params = await searchParams;
   // searchParams pode vir como array se o parametro repetir; normaliza p/ string.
   const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -45,15 +44,5 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
     initialState.title = rawTitle;
   }
 
-  const isAdmin = user.role === "admin";
-
-  return (
-    <AppShell
-      userName={user.name ?? user.email ?? "Usuário"}
-      userEmail={user.email ?? ""}
-      isAdmin={isAdmin}
-    >
-      <EditorClient initialState={initialState} />
-    </AppShell>
-  );
+  return <EditorClient initialState={initialState} />;
 }

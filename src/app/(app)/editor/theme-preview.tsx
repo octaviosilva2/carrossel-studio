@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch } from "react";
+import { useEffect, useRef, useState, type Dispatch } from "react";
 
 import { Slide } from "@/components/slide/slide";
 import { CANVAS_H, CANVAS_W } from "@/components/slide/slide-tokens";
@@ -21,11 +21,13 @@ import {
   type EditorSlide,
 } from "@/lib/editor-state";
 
-// Preview escalado — fatia herda a formula validada em render-test/page.tsx. O no
-// do <Slide> continua em 1080x1350 REAIS; a escala e SO CSS visual (nunca `zoom`,
-// nunca mexer em width/height do no, para nao quebrar a fidelidade do export S4).
-const PREVIEW_W = 400;
-const PREVIEW_SCALE = PREVIEW_W / CANVAS_W;
+// Preview escalado — o no do <Slide> continua em 1080x1350 REAIS; a escala e SO CSS
+// visual (nunca `zoom`, nunca mexer em width/height do no, para nao quebrar a
+// fidelidade do export S4). A largura agora e FLUIDA: mede a coluna (ResizeObserver)
+// e escala o slide para preenche-la, com limites min/max — assim o preview cresce
+// proporcionalmente com a tela em vez de ficar travado em pixels fixos.
+const PREVIEW_MIN_W = 240;
+const PREVIEW_MAX_W = 460;
 
 interface ThemePreviewProps {
   identity: CarouselIdentity;
@@ -54,6 +56,26 @@ export function ThemePreview({
     ? slides.findIndex((s) => s.id === slide.id)
     : -1;
 
+  // Mede a largura disponivel na coluna e escala o slide para preenche-la (com
+  // limites). Comeca em PREVIEW_MAX_W e ajusta apos o mount — sem mismatch de SSR
+  // (client component). Recalcula quando a coluna muda de tamanho (janela/split).
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [previewW, setPreviewW] = useState(PREVIEW_MAX_W);
+  useEffect(() => {
+    const el = measureRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (!width) return;
+      setPreviewW(Math.max(PREVIEW_MIN_W, Math.min(PREVIEW_MAX_W, width)));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const previewScale = previewW / CANVAS_W;
+  const previewH = CANVAS_H * previewScale;
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-4">
@@ -81,35 +103,38 @@ export function ThemePreview({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {slide === null ? (
-          // Estado vazio: 0 slides. NAO renderiza <Slide>.
-          <div
-            style={{ width: PREVIEW_W, height: CANVAS_H * PREVIEW_SCALE }}
-            className="mx-auto flex items-center justify-center rounded-md border border-dashed border-border bg-muted/40 p-6 text-center"
-          >
-            <p className="text-sm text-muted-foreground">
-              Adicione um slide para comecar.
-            </p>
-          </div>
-        ) : (
-          // Container externo (recorta o excedente da escala).
-          <div
-            style={{ width: PREVIEW_W, height: CANVAS_H * PREVIEW_SCALE }}
-            className="mx-auto overflow-hidden rounded-md border border-border"
-          >
-            {/* Container interno: 1080x1350 reais, escalado por transform. */}
+        {/* Wrapper de medicao: ocupa a largura da coluna; o ResizeObserver le daqui. */}
+        <div ref={measureRef} className="w-full">
+          {slide === null ? (
+            // Estado vazio: 0 slides. NAO renderiza <Slide>.
             <div
-              style={{
-                width: CANVAS_W,
-                height: CANVAS_H,
-                transform: `scale(${PREVIEW_SCALE})`,
-                transformOrigin: "top left",
-              }}
+              style={{ width: previewW, height: previewH }}
+              className="mx-auto flex items-center justify-center rounded-md border border-dashed border-border bg-muted/40 p-6 text-center"
             >
-              <Slide data={toSlideData(identity, slide, theme)} />
+              <p className="text-sm text-muted-foreground">
+                Adicione um slide para comecar.
+              </p>
             </div>
-          </div>
-        )}
+          ) : (
+            // Container externo (recorta o excedente da escala).
+            <div
+              style={{ width: previewW, height: previewH }}
+              className="mx-auto overflow-hidden rounded-md border border-border"
+            >
+              {/* Container interno: 1080x1350 reais, escalado por transform. */}
+              <div
+                style={{
+                  width: CANVAS_W,
+                  height: CANVAS_H,
+                  transform: `scale(${previewScale})`,
+                  transformOrigin: "top left",
+                }}
+              >
+                <Slide data={toSlideData(identity, slide, theme)} />
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Miniaturas: clique seleciona o slide (SELECT_SLIDE). */}
         {slides.length > 0 ? (

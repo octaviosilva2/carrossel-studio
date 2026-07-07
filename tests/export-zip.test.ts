@@ -242,8 +242,11 @@ describe("toExportSafeUrl — normaliza URLs para forma canvas-safe", () => {
     const result = await toExportSafeUrl(crossUrl);
     expect(result).toBeTypeOf("string");
     expect(result!.startsWith("data:image/png")).toBe(true);
-    // Fez a busca da URL cross-origin original.
-    expect(fetch).toHaveBeenCalledWith(crossUrl);
+    // Busca via PROXY same-origin (/api/blob/proxy) com a URL original no query,
+    // nao um fetch direto ao MinIO — assim o export nao depende de CORS no bucket.
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/blob/proxy?url=${encodeURIComponent(crossUrl)}`,
+    );
   });
 
   it("cross-origin com fetch !ok lanca erro legivel de export", async () => {

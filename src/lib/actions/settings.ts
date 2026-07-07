@@ -52,6 +52,9 @@ export async function getClientSettings(): Promise<ClientSettingsWithOnboarding>
  * banco; escreve com WHERE id AND ownerId (defesa em profundidade: usuario so
  * altera a propria marca). Carrosseis com overrides null passam a herdar os novos
  * valores automaticamente (nao materializamos herdados — ver carousel-mapping).
+ * Se o onboarding ainda nao foi concluido (cliente pulou o fluxo dedicado), salvar
+ * a identidade aqui TAMBEM marca onboardingCompletedAt — o usuario ja fez o que o
+ * onboarding pedia, so nao pelo caminho dedicado (evita o aviso preso pra sempre).
  */
 export async function updateClientSettings(
   input: ClientSettings,
@@ -73,6 +76,7 @@ export async function updateClientSettings(
       avatarUrl: data.avatarUrl,
       verified: data.verified,
       theme: data.theme,
+      onboardingCompletedAt: client.onboardingCompletedAt ?? now,
       updatedAt: now,
     })
     // ownerId reforcado na escrita (nunca edita marca de outro dono).
