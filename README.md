@@ -6,6 +6,17 @@
 
 ## English
 
+## Project snapshot
+
+| Item | Information |
+|---|---|
+| **Status** | Production — sold to real clients |
+| **My role** | Primary builder — product, architecture, implementation, deployment, onboarding, validation |
+| **Collaboration** | Solo |
+| **Outcome** | Live done-for-you SaaS with paying clients; two content paths (AI-assisted / manual) feeding one deterministic render engine; ~320 tests |
+| **Stack** | Next.js 15 · React 19 · TypeScript · PostgreSQL · Drizzle · Auth.js v5 · MinIO · Anthropic API · Vercel |
+| **Privacy** | Standard multi-tenant SaaS; no client data in the repository |
+
 **Done-for-you SaaS platform that generates Twitter/X-style carousels ready for
 Instagram** — two content paths (AI-assisted or fully manual) feeding the same
 deterministic rendering engine, exported as 1080×1350 PNGs in light or dark theme.
